@@ -1,0 +1,68 @@
+###############################
+# STAGE 1 test and build binary
+###############################
+
+FROM golang:1.12 AS builder
+
+ARG CMD
+
+# Set Go build env vars
+ARG GOOS=linux
+ARG GOARCH=amd64
+ENV GOOS=${GOOS} GOARCH=${GOARCH}
+
+# Create a non-root user
+ARG GOUSER=appuser
+RUN adduser --gecos '' --disabled-password --no-create-home ${GOUSER}
+
+WORKDIR /go/src/app
+
+# Fetch dependencies
+# Do this first for caching sake
+ENV GO111MODULE=on
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source
+COPY . .
+
+# Install/Update packages (after src COPY so it always happens)
+RUN apt-get update -y \
+    && apt-get upgrade -y \
+    && apt-get install -y ca-certificates tzdata \
+    && update-ca-certificates
+
+# Run tests
+# The -race flag requires CGO_ENABLED=1
+RUN CGO_ENABLED=1 go test -timeout 30s -race -v ./...
+
+# Build the selfcheck binary
+RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/selfcheck ./cmd/selfcheck
+
+# Build the binary
+RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/${CMD} ./cmd/${CMD}
+
+##########################
+# STAGE 2 deployment image
+##########################
+FROM scratch
+
+# Import from the builder.
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# Copy our static executable.
+COPY --from=builder /go/bin/selfcheck /usr/bin/selfcheck
+COPY --from=builder /go/bin/${CMD} /usr/bin/${CMD}
+
+# Use an unprivileged user.
+USER ${GOUSER}
+
+# Expose healthcheck port.
+ENV PORT=8080
+EXPOSE $PORT
+
+HEALTHCHECK --interval=60s --timeout=1s --start-period=2s --retries=3 CMD ["/usr/bin/selfcheck"]
+
+ENTRYPOINT ["/usr/bin/${CMD}"]
