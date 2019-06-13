@@ -1,0 +1,40 @@
+sudo: required
+language: go
+go:
+  - "1.11.x"
+  - "1.12.x"
+services:
+  - docker
+
+matrix:
+  allow_failures:
+  - go: tip
+
+env:
+  - GO111MODULE=on
+  - GO111MODULE=off
+
+addons:
+  # ssh_known_hosts: github.com
+  apt:
+    update: true
+    packages:
+    - docker-ce
+
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" && ! $(which nc) ]] ; then sudo apt-get install -y netcat ; fi
+  - sudo sysctl -w vm.max_map_count=262144
+
+install:
+  - docker-compose pull
+  - go get -t -v ./...
+
+before_script:
+  - docker-compose up -d elasticsearch localstack
+  - docker-compose run wait
+
+script:
+  - go test -race -timeout 10s
+
+after_script:
+  - docker-compose down -v
