@@ -12,6 +12,15 @@ import (
 	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
 
+// MakeCloudwatchData returns a list of CloudWatch autoscaling
+// metric data points related to an Elasticsearch cluster,
+// including:
+//
+// - File system utilization (data nodes only)
+// - JVM heap utilization (both in total, and per-memory pool)
+// - JVM garbage collection stats
+//
+// The metrics are both in total, and broken out by node role.
 func MakeCloudwatchData(nodes map[string]*esasg.Node) []*cloudwatch.MetricDatum {
 	timestamp := time.Now()
 

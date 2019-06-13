@@ -33,7 +33,7 @@ func NewCatShardsService(client *elastic.Client) *CatShardsService {
 	}
 }
 
-// Limit response to shards of this index pattern (by default all indices are returned).
+// Index limits the response to shards of this index pattern (by default all indices are returned).
 func (s *CatShardsService) Index(index string) *CatShardsService {
 	s.index = index
 	return s

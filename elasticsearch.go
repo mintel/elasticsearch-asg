@@ -144,11 +144,11 @@ func (s *ElasticsearchService) Node(ctx context.Context, name string) (*Node, er
 	} else if len(nodes) != 1 {
 		return nil, errors.New("got wrong number of nodes")
 	}
-	if n, ok := nodes[name]; !ok {
+	n, ok := nodes[name]
+	if !ok {
 		return nil, errors.New("got node with wrong name")
-	} else {
-		return n, nil
 	}
+	return n, nil
 }
 
 // Drain excludes a node from shard allocation, which will cause Elasticsearch
@@ -170,7 +170,7 @@ func (s *ElasticsearchService) Drain(ctx context.Context, n *Node) error {
 	settings.IP = nil
 	settings.Host = nil
 	settings.Attr = nil
-	_, err = es.NewClusterPutSettingsService(s.client).BodyJson(map[string]interface{}{"transient": settings.Map()}).Do(ctx)
+	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(map[string]interface{}{"transient": settings.Map()}).Do(ctx)
 	return err
 }
 
@@ -199,7 +199,7 @@ func (s *ElasticsearchService) Undrain(ctx context.Context, n *Node) error {
 	settings.IP = nil
 	settings.Host = nil
 	settings.Attr = nil
-	_, err = es.NewClusterPutSettingsService(s.client).BodyJson(map[string]interface{}{"transient": settings.Map()}).Do(ctx)
+	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(map[string]interface{}{"transient": settings.Map()}).Do(ctx)
 	return err
 }
 

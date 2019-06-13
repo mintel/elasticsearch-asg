@@ -17,12 +17,13 @@ type ClusterPutSettingsService struct {
 	pretty        bool
 	flatSettings  *bool
 	masterTimeout string
-	bodyJson      interface{}
+	bodyJSON      interface{}
 	bodyString    string
 	transient     map[string]interface{}
 	persistent    map[string]interface{}
 }
 
+// NewClusterPutSettingsService returns a new ClusterPutSettingsService.
 func NewClusterPutSettingsService(client *elastic.Client) *ClusterPutSettingsService {
 	return &ClusterPutSettingsService{
 		client:     client,
@@ -31,11 +32,13 @@ func NewClusterPutSettingsService(client *elastic.Client) *ClusterPutSettingsSer
 	}
 }
 
+// Transient adds a transient settings to the request.
 func (s *ClusterPutSettingsService) Transient(setting string, value interface{}) *ClusterPutSettingsService {
 	s.transient[setting] = value
 	return s
 }
 
+// Persistent adds a persistent settings to the request.
 func (s *ClusterPutSettingsService) Persistent(setting string, value interface{}) *ClusterPutSettingsService {
 	s.persistent[setting] = value
 	return s
@@ -59,9 +62,9 @@ func (s *ClusterPutSettingsService) Pretty(pretty bool) *ClusterPutSettingsServi
 	return s
 }
 
-// BodyJson is documented as: The index settings to be updated.
-func (s *ClusterPutSettingsService) BodyJson(body interface{}) *ClusterPutSettingsService {
-	s.bodyJson = body
+// BodyJSON is documented as: The index settings to be updated.
+func (s *ClusterPutSettingsService) BodyJSON(body interface{}) *ClusterPutSettingsService {
+	s.bodyJSON = body
 	return s
 }
 
@@ -110,8 +113,8 @@ func (s *ClusterPutSettingsService) Do(ctx context.Context) (*ClusterPutSettings
 
 	// Setup HTTP request body
 	var body interface{}
-	if s.bodyJson != nil {
-		body = s.bodyJson
+	if s.bodyJSON != nil {
+		body = s.bodyJSON
 	} else if s.bodyString != "" {
 		body = s.bodyString
 	} else {
@@ -153,6 +156,9 @@ func (s *ClusterPutSettingsService) Do(ctx context.Context) (*ClusterPutSettings
 // ClusterPutSettingsResponse represents the response from the Elasticsearch
 // `PUT /_cluster/settings` API. It contains the new values of the changed settings.
 type ClusterPutSettingsResponse struct {
+	// Persistent hold the Elasticsearch settings that persist between cluster restarts.
 	Persistent *gjson.Result
-	Transient  *gjson.Result
+
+	// Transient hold the Elasticsearch settings that do not persist between cluster restarts.
+	Transient *gjson.Result
 }

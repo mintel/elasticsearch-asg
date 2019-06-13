@@ -11,10 +11,17 @@ import (
 )
 
 const (
-	Day   = 24 * time.Hour
-	Week  = 7 * Day
+	// Day duration
+	Day = 24 * time.Hour
+
+	// Week duration
+	Week = 7 * Day
+
+	// Month duration
 	Month = (time.Duration(30.436875*float64(Day)) / time.Second) * time.Second // truncate to second
-	Year  = (time.Duration(365.2425*float64(Day)) / time.Second) * time.Second  // truncate to second
+
+	// Year duration
+	Year = (time.Duration(365.2425*float64(Day)) / time.Second) * time.Second // truncate to second
 )
 
 const (
@@ -113,15 +120,15 @@ func addDurationMul(d time.Duration, n float64, u time.Duration) (time.Duration,
 	} else if r < float64(minDuration) {
 		panic("subtraction overflow")
 	} else if r < 0 {
-		if i, ok := overflow.Add64(int64(d), int64(r)); ok {
+		i, ok := overflow.Add64(int64(d), int64(r))
+		if ok {
 			return time.Duration(i), ok
-		} else {
-			return minDuration, ok
 		}
+		return minDuration, ok
 	}
-	if i, ok := overflow.Add64(int64(d), int64(r)); ok {
+	i, ok := overflow.Add64(int64(d), int64(r))
+	if ok {
 		return time.Duration(i), ok
-	} else {
-		return maxDuration, ok
 	}
+	return maxDuration, ok
 }

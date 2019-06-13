@@ -44,13 +44,13 @@ func (lt Transition) String() string {
 }
 
 const (
-	// Instance is launching.
+	// TransitionLaunching represents an instance that is launching.
 	TransitionLaunching Transition = "autoscaling:EC2_INSTANCE_LAUNCHING"
 
-	// Instance is terminating.
+	// TransitionTerminating represents an instance that is terminating.
 	TransitionTerminating Transition = "autoscaling:EC2_INSTANCE_TERMINATING"
 
-	// Sent by AWS on initial lifecycle hook creation.
+	// TestEvent is sent by AWS on initial lifecycle hook creation.
 	TestEvent = "autoscaling:TEST_NOTIFICATION"
 )
 

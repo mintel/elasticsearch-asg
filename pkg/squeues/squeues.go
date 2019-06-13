@@ -16,13 +16,13 @@ import (
 const maxMessages = 10
 
 var (
-	// Max seconds to wait for messages.
+	// DefaultPollTime is default the max seconds to wait for messages.
 	DefaultPollTime = 20 * time.Second
 
-	// Initial message visibility timeout.
+	// DefaultInitialVisibilityTimeout is the default initial message visibility timeout.
 	DefaultInitialVisibilityTimeout = 5 * time.Second
 
-	// Max message visibility timeout.
+	// DefaultMaxVisibilityTimeout is the default max message visibility timeout.
 	DefaultMaxVisibilityTimeout = 60 * time.Second
 )
 

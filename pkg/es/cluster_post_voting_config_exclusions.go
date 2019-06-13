@@ -26,6 +26,7 @@ func NewClusterPostVotingConfigExclusion(c *elastic.Client) *ClusterPostVotingCo
 	}
 }
 
+// Node sets the node(s) that should be excluded from voting configuration.
 func (s *ClusterPostVotingConfigExclusion) Node(node string) *ClusterPostVotingConfigExclusion {
 	s.node = node
 	return s

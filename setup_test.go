@@ -15,7 +15,9 @@ func setupLogging(t *testing.T) func() {
 	teardown := func() {
 		f2()
 		f1()
-		logger.Sync()
+		if err := logger.Sync(); err != nil {
+			panic(err)
+		}
 	}
 	return teardown
 }

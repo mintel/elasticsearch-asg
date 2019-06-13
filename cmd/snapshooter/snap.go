@@ -6,6 +6,8 @@ import (
 	ptime "github.com/mintel/elasticsearch-asg/pkg/time"
 )
 
+// SnapshotWindow represents how often to take Elasticsearch snapshots,
+// and how long to keep them.
 type SnapshotWindow struct {
 	Every   time.Duration // Take snapshots with this frequency.
 	KeepFor time.Duration // Keep snapshots for this long.
@@ -14,16 +16,19 @@ type SnapshotWindow struct {
 // NewSnapshotWindow returns a new SnapshotWindow by parsing two ISO 8601 Duration strings.
 func NewSnapshotWindow(every, keepFor string) (SnapshotWindow, error) {
 	sw := SnapshotWindow{}
-	if d, err := ptime.ParseISO8601D(every); err != nil {
+
+	d, err := ptime.ParseISO8601D(every)
+	if err != nil {
 		return SnapshotWindow{}, err
-	} else {
-		sw.Every = d
 	}
-	if d, err := ptime.ParseISO8601D(keepFor); err != nil {
+	sw.Every = d
+
+	d, err = ptime.ParseISO8601D(keepFor)
+	if err != nil {
 		return SnapshotWindow{}, err
-	} else {
-		sw.KeepFor = d
 	}
+	sw.KeepFor = d
+
 	return sw, nil
 }
 

@@ -26,7 +26,11 @@ func TestCatShardsService(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	defer client.DeleteIndex("foobar").Do(ctx)
+	defer func() {
+		if _, err := client.DeleteIndex("foobar").Do(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	resp, err := NewCatShardsService(client).Columns("*").Do(ctx)
 	if assert.NoError(t, err) && assert.NotEmpty(t, resp) {

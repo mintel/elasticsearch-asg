@@ -243,8 +243,12 @@ func launchCondition(client *elastic.Client) func(context.Context, *lifecycle.Ev
 	}
 }
 
-const loggerKey = "logger"
+type ctxKey string
 
+const loggerKey ctxKey = "logger"
+
+// WithFields adds a logger to ctx's values with the given fields, or adds
+// the fields to an existing logger.
 func WithFields(ctx context.Context, fields ...zap.Field) context.Context {
 	logger := Logger(ctx)
 	return context.WithValue(ctx, loggerKey, logger.With(fields...))
