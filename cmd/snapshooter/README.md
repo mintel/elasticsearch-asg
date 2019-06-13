@@ -1,7 +1,6 @@
 # elasticsearch-snapshooter
 
 ```bash
-$ ./snapshooter --help
 usage: snapshooter [<flags>] [<url>]
 
 Create and clean up Elasticsearch snapshots on a schedule.

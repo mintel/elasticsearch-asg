@@ -20,9 +20,11 @@ const (
 // SnapshotFormat is the format for snapshot names (time.Time.Format())
 const SnapshotFormat = "2006-01-02-15-04-05"
 
+const defaultURL = "http://localhost:9200"
+
 // Command line opts
 var (
-	esHost  = kingpin.Arg("url", "Elasticsearch URL. Default: http://localhost:9200").Default("http://localhost:9200").String()
+	esHost  = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).String()
 	windows = kingpin.Flag("window", "Snapshot frequency + TTL. May be set multiple times. ISO 8601 Duration string format. Example: `--window P1M=PT1H` == keep hourly snapshots for 1 month.").Default(
 		"P1M=PT1H",
 		"P3M=P1W",
