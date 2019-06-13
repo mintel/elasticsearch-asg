@@ -26,7 +26,7 @@ const defaultURL = "http://localhost:9200"
 
 // Command line opts
 var (
-	esHost    = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).String()
+	esURL     = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
 	interval  = kingpin.Flag("interval", "Time between pushing metrics.").Default("1m").Duration()
 	region    = kingpin.Flag("region", "AWS Region.").String()
 	namespace = kingpin.Flag("namespace", "AWS CloudWatch metrics namespace.").Default("Elasticsearch").String()
@@ -58,7 +58,7 @@ func main() {
 
 	esClient, err := elastic.DialContext(
 		ctx,
-		elastic.SetURL(*esHost),
+		elastic.SetURL((*esURL).String()),
 		elastic.SetRetrier(elastic.NewBackoffRetrier(elastic.NewExponentialBackoff(esRetryInit, esRetryMax))),
 	)
 	if err != nil {
