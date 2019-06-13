@@ -2,12 +2,16 @@ package es
 
 import (
 	"context"
+	"testing"
+
 	elastic "github.com/olivere/elastic/v7"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestClusterPutSettingsService(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
 	defer setupLogging(t)()
 
 	client, err := elastic.NewClient()

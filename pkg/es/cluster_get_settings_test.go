@@ -8,6 +8,9 @@ import (
 )
 
 func TestClusterGetSettingsService(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
 	defer setupLogging(t)()
 
 	client, err := elastic.NewClient()
