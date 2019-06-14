@@ -281,9 +281,7 @@ func TestKeepAlive(t *testing.T) {
 	m.On("cond", anyCtx, event).Once().Return(false, error(nil)) // Postpone event
 	m.On("cond", anyCtx, event).Once().Return(true, error(nil))  // Allow event to continue
 
-	timeout := setTimeout(t, time.Second)
 	err := KeepAlive(ctx, m, event, cond)
-	timeout.Stop()
 
 	assert.NoError(t, err)
 	m.AssertCalled(t, "RecordLifecycleActionHeartbeatWithContext", anyCtx, mIn, nilReqOpts)
@@ -291,12 +289,6 @@ func TestKeepAlive(t *testing.T) {
 }
 
 var nilReqOpts []request.Option
-
-func setTimeout(t *testing.T, d time.Duration) *time.Timer {
-	return time.AfterFunc(d, func() {
-		t.Fatal("timed out")
-	})
-}
 
 var anyCtx = mock.MatchedBy(func(ctx context.Context) bool {
 	return true

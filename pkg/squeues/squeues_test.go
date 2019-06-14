@@ -163,9 +163,7 @@ func TestSQS_Run(t *testing.T) {
 
 	shouldFinishIn := q.PollTime/2 + msg1Delay + 10*time.Millisecond
 	doCancel := time.AfterFunc(shouldFinishIn, cancel)
-	timeout := setTimeout(t, shouldFinishIn+10*time.Millisecond)
 	err := q.Run(ctx, handleF)
-	timeout.Stop()
 
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
@@ -269,9 +267,7 @@ func TestSQS_receive_ctxCancel(t *testing.T) {
 	results := make(chan []*sqs.Message)
 
 	doCancel := time.AfterFunc(finishIn/2, cancel)
-	timeout := setTimeout(t, finishIn+10*time.Millisecond)
 	err := <-q.receive(ctx, 1, results)
-	timeout.Stop()
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
 	close(results)
@@ -326,9 +322,7 @@ func TestSQS_handle_postpone(t *testing.T) {
 	m.On("handleF", anyCtx, msg).After(finishIn).Return(error(nil))
 
 	now := time.Now()
-	timeout := setTimeout(t, finishIn+10*time.Millisecond)
 	err := <-q.handle(ctx, handleF, msg, done, postpone)
-	timeout.Stop()
 	assert.NoError(t, err)
 
 	assert.NoError(t, err)
@@ -385,9 +379,7 @@ func TestSQS_handle_ctxCancel(t *testing.T) {
 	m.On("handleF", anyCtx, msg).After(finishIn).Return(error(nil))
 
 	doCancel := time.AfterFunc(finishIn/2, cancel)
-	timeout := setTimeout(t, finishIn+10*time.Millisecond)
 	err := <-q.handle(ctx, handleF, msg, done, postpone)
-	timeout.Stop()
 
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
@@ -482,9 +474,7 @@ func TestSQS_changeVisibilityTimeout_ctxCancel(t *testing.T) {
 	).After(finishIn).Return((*sqs.ChangeMessageVisibilityOutput)(nil), context.Canceled)
 
 	doCancel := time.AfterFunc(finishIn/2, cancel)
-	timeout := setTimeout(t, finishIn+10*time.Millisecond)
 	err := <-q.changeVisibilityTimeout(ctx, msg, d)
-	timeout.Stop()
 
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
@@ -572,9 +562,7 @@ func TestSQS_delete_ctxCancel(t *testing.T) {
 	).After(finishIn).Return((*sqs.DeleteMessageOutput)(nil), context.Canceled)
 
 	doCancel := time.AfterFunc(finishIn/2, cancel)
-	timeout := setTimeout(t, finishIn+10*time.Millisecond)
 	err := <-q.delete(ctx, msg)
-	timeout.Stop()
 
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
@@ -586,12 +574,6 @@ func TestSQS_delete_ctxCancel(t *testing.T) {
 		},
 		nilReqOpts,
 	)
-}
-
-func setTimeout(t *testing.T, d time.Duration) *time.Timer {
-	return time.AfterFunc(d, func() {
-		t.Fatal("timed out")
-	})
 }
 
 var anyCtx = mock.MatchedBy(func(ctx context.Context) bool {
