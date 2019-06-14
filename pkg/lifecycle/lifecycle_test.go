@@ -27,7 +27,7 @@ var (
 	asgName        = "ASGName"
 	hookName       = "MyHook"
 	transition     = TransitionLaunching
-	hTimeout       = 10 * time.Millisecond
+	hTimeout       = 50 * time.Millisecond
 	hGlobalTimeout = 100 * hTimeout
 )
 
