@@ -33,10 +33,6 @@ RUN apt-get update -y \
     && apt-get install -y ca-certificates tzdata \
     && update-ca-certificates
 
-# Run tests
-# The -race flag requires CGO_ENABLED=1
-RUN CGO_ENABLED=1 go test -timeout 30s -race -short -v ./...
-
 # Build the binary
 RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/${CMD} ./cmd/${CMD}
 
