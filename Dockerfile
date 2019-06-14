@@ -34,7 +34,7 @@ RUN apt-get update -y \
 
 # Run tests
 # The -race flag requires CGO_ENABLED=1
-RUN CGO_ENABLED=1 go test -timeout 30s -race -v ./...
+RUN CGO_ENABLED=1 go test -timeout 30s -race -short -v ./...
 
 # Build the selfcheck binary
 RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/selfcheck ./cmd/selfcheck
