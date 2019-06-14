@@ -1,5 +1,16 @@
 # cloudwatcher
 
+Cloudwatcher pushes metrics about an Elasticsearch cluster to AWS CloudWatch,
+mainly to run AWS Autoscaling Groups. The metrics include:
+
+- File system utilization (data nodes only)
+- JVM heap utilization (both in total, and per-memory pool)
+- JVM garbage collection stats
+
+The metrics are both in total, and broken out by node role (master, data, etc...).
+
+## Usage
+
 ```bash
 usage: cloudwatcher [<flags>] [<url>]
 

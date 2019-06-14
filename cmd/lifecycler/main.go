@@ -34,7 +34,7 @@ const defaultURL = "http://localhost:9200"
 
 // Command line opts
 var (
-	queueURL = kingpin.Arg("queue", "URL of SQS queue.").Required().String()
+	queueURL = kingpin.Arg("queue", "URL of SQS queue receiving lifecycle hook events.").Required().String()
 	esURL    = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
 )
 
