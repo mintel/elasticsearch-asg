@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -14,8 +15,8 @@ import (
 const defaultURL = "http://localhost:9200"
 
 var (
-	esURL    = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
-	endpoint = kingpin.Flag("endpoint", "Endpoint to serve healthchecks at.").Default(":9201").URL()
+	esURL = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
+	port  = kingpin.Flag("port", "Port to serve healthchecks on.").Default("9201").Int()
 )
 
 func main() {
@@ -38,7 +39,7 @@ func main() {
 		logger.Fatal("Error creating healthcheck handler", zap.Error(err))
 	}
 	logger.Info("Serving health and readiness checks")
-	err = http.ListenAndServe((*endpoint).Host, mux)
+	err = http.ListenAndServe(fmt.Sprintf(":%d", *port), mux)
 	if err != nil {
 		logger.Fatal("Error serving healthchecks", zap.Error(err))
 	}
