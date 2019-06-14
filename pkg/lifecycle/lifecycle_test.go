@@ -123,7 +123,7 @@ func TestNewEventFromMsg(t *testing.T) {
 	result, err := NewEventFromMsg(ctx, m, []byte(input))
 	assert.NoError(t, err)
 	assert.Equal(t, want, result)
-	m.AssertCalled(t, "DescribeLifecycleHooksWithContext", anyCtx, mIn, nilReqOpts)
+	m.AssertExpectations(t)
 }
 
 func TestNewEventFromMsg_testEvent(t *testing.T) {
@@ -284,8 +284,7 @@ func TestKeepAlive(t *testing.T) {
 	err := KeepAlive(ctx, m, event, cond)
 
 	assert.NoError(t, err)
-	m.AssertCalled(t, "RecordLifecycleActionHeartbeatWithContext", anyCtx, mIn, nilReqOpts)
-	m.AssertCalled(t, "cond", anyCtx, event)
+	m.AssertExpectations(t)
 }
 
 var nilReqOpts []request.Option

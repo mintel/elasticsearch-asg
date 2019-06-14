@@ -167,12 +167,7 @@ func TestSQS_Run(t *testing.T) {
 
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
-	m.AssertCalled(t, "handleF", anyCtx, msg1)
-	m.AssertCalled(t, "handleF", anyCtx, msg2)
-	m.AssertCalled(t, "ReceiveMessageWithContext", anyCtx, expectedReceiveInput, nilReqOpts)
-	m.AssertCalled(t, "ChangeMessageVisibilityWithContext", anyCtx, msg1VisInput, nilReqOpts)
-	m.AssertCalled(t, "DeleteMessageWithContext", anyCtx, msg1DelInput, nilReqOpts)
-	m.AssertCalled(t, "DeleteMessageWithContext", anyCtx, msg2DelInput, nilReqOpts)
+	m.AssertExpectations(t)
 }
 
 func TestSQS_receive_success(t *testing.T) {
@@ -203,15 +198,7 @@ func TestSQS_receive_success(t *testing.T) {
 	if assert.Len(t, r, 1) {
 		assert.Equal(t, msg, r[0])
 	}
-	m.AssertCalled(t, "ReceiveMessageWithContext",
-		anyCtx,
-		&sqs.ReceiveMessageInput{
-			QueueUrl:            aws.String(q.queueURL),
-			MaxNumberOfMessages: aws.Int64(1),
-			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
-			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
-		},
-		nilReqOpts)
+	m.AssertExpectations(t)
 }
 
 func TestSQS_receive_failure(t *testing.T) {
@@ -237,15 +224,7 @@ func TestSQS_receive_failure(t *testing.T) {
 	assert.Equal(t, <-errc, want)
 	close(results)
 	assert.Zero(t, <-results)
-	m.AssertCalled(t, "ReceiveMessageWithContext",
-		anyCtx,
-		&sqs.ReceiveMessageInput{
-			QueueUrl:            aws.String(q.queueURL),
-			MaxNumberOfMessages: aws.Int64(1),
-			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
-			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
-		},
-		nilReqOpts)
+	m.AssertExpectations(t)
 }
 
 // Test context cancel prevents goroutine from blocking
@@ -272,15 +251,7 @@ func TestSQS_receive_ctxCancel(t *testing.T) {
 	assert.Equal(t, context.Canceled, err)
 	close(results)
 	assert.Zero(t, <-results)
-	m.AssertCalled(t, "ReceiveMessageWithContext",
-		anyCtx,
-		&sqs.ReceiveMessageInput{
-			QueueUrl:            aws.String(q.queueURL),
-			MaxNumberOfMessages: aws.Int64(1),
-			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
-			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
-		},
-		nilReqOpts)
+	m.AssertExpectations(t)
 }
 
 func TestSQS_handle_success(t *testing.T) {
@@ -303,7 +274,7 @@ func TestSQS_handle_success(t *testing.T) {
 	close(done)
 	assert.Zero(t, <-postpone)
 	assert.Equal(t, msg, <-done)
-	m.AssertCalled(t, "handleF", anyCtx, msg)
+	m.AssertExpectations(t)
 }
 func TestSQS_handle_postpone(t *testing.T) {
 	q, _, ctx, _, teardown := setup(t)
@@ -334,7 +305,7 @@ func TestSQS_handle_postpone(t *testing.T) {
 		assert.WithinDuration(t, want, got.T, delta)
 	}
 	assert.Equal(t, msg, <-done)
-	m.AssertCalled(t, "handleF", anyCtx, msg)
+	m.AssertExpectations(t)
 }
 
 func TestSQS_handle_failure(t *testing.T) {
@@ -358,7 +329,7 @@ func TestSQS_handle_failure(t *testing.T) {
 	assert.Zero(t, <-postpone)
 	close(done)
 	assert.Zero(t, <-done)
-	m.AssertCalled(t, "handleF", anyCtx, msg)
+	m.AssertExpectations(t)
 }
 
 // Test context cancel prevents goroutine from blocking
@@ -387,7 +358,7 @@ func TestSQS_handle_ctxCancel(t *testing.T) {
 	assert.Zero(t, <-postpone)
 	close(done)
 	assert.Zero(t, <-done)
-	m.AssertCalled(t, "handleF", anyCtx, msg)
+	m.AssertExpectations(t)
 }
 
 func TestSQS_changeVisibilityTimeout_success(t *testing.T) {
@@ -411,15 +382,7 @@ func TestSQS_changeVisibilityTimeout_success(t *testing.T) {
 	)
 	errc := q.changeVisibilityTimeout(ctx, msg, d)
 	assert.NoError(t, <-errc)
-	m.AssertCalled(t, "ChangeMessageVisibilityWithContext",
-		anyCtx,
-		&sqs.ChangeMessageVisibilityInput{
-			QueueUrl:          aws.String(q.queueURL),
-			ReceiptHandle:     msg.ReceiptHandle,
-			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
-		},
-		nilReqOpts,
-	)
+	m.AssertExpectations(t)
 }
 func TestSQS_changeVisibilityTimeout_failure(t *testing.T) {
 	q, m, ctx, _, teardown := setup(t)
@@ -443,15 +406,7 @@ func TestSQS_changeVisibilityTimeout_failure(t *testing.T) {
 	)
 	errc := q.changeVisibilityTimeout(ctx, msg, d)
 	assert.Equal(t, want, <-errc)
-	m.AssertCalled(t, "ChangeMessageVisibilityWithContext",
-		anyCtx,
-		&sqs.ChangeMessageVisibilityInput{
-			QueueUrl:          aws.String(q.queueURL),
-			ReceiptHandle:     msg.ReceiptHandle,
-			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
-		},
-		nilReqOpts,
-	)
+	m.AssertExpectations(t)
 }
 
 // Test context cancel prevents goroutine from blocking
@@ -478,15 +433,7 @@ func TestSQS_changeVisibilityTimeout_ctxCancel(t *testing.T) {
 
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
-	m.AssertCalled(t, "ChangeMessageVisibilityWithContext",
-		anyCtx,
-		&sqs.ChangeMessageVisibilityInput{
-			QueueUrl:          aws.String(q.queueURL),
-			ReceiptHandle:     msg.ReceiptHandle,
-			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
-		},
-		nilReqOpts,
-	)
+	m.AssertExpectations(t)
 }
 
 func TestSQS_delete_success(t *testing.T) {
@@ -508,14 +455,7 @@ func TestSQS_delete_success(t *testing.T) {
 	)
 	errc := q.delete(ctx, msg)
 	assert.NoError(t, <-errc)
-	m.AssertCalled(t, "DeleteMessageWithContext",
-		anyCtx,
-		&sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(q.queueURL),
-			ReceiptHandle: msg.ReceiptHandle,
-		},
-		nilReqOpts,
-	)
+	m.AssertExpectations(t)
 }
 func TestSQS_delete_failure(t *testing.T) {
 	q, m, ctx, _, teardown := setup(t)
@@ -534,14 +474,7 @@ func TestSQS_delete_failure(t *testing.T) {
 	).Return((*sqs.DeleteMessageOutput)(nil), want)
 	errc := q.delete(ctx, msg)
 	assert.Equal(t, want, <-errc)
-	m.AssertCalled(t, "DeleteMessageWithContext",
-		anyCtx,
-		&sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(q.queueURL),
-			ReceiptHandle: msg.ReceiptHandle,
-		},
-		nilReqOpts,
-	)
+	m.AssertExpectations(t)
 }
 
 // Test context cancel prevents goroutine from blocking
@@ -566,14 +499,7 @@ func TestSQS_delete_ctxCancel(t *testing.T) {
 
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
-	m.AssertCalled(t, "DeleteMessageWithContext",
-		anyCtx,
-		&sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(q.queueURL),
-			ReceiptHandle: msg.ReceiptHandle,
-		},
-		nilReqOpts,
-	)
+	m.AssertExpectations(t)
 }
 
 var anyCtx = mock.MatchedBy(func(ctx context.Context) bool {
