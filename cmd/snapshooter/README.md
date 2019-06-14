@@ -10,12 +10,13 @@ $ ./snapshooter \
     --window P1M=PT1H \
     --window P3M=P1W \
     --window P3Y=P1M \
+    --delete
 ```
 
 Create a S3 snapshot repository named "backups" (if one doesn't already exist).
 
 Then create hourly snapshots that are kept for one month, weekly snapshots that are kept for 3 months,
-and monthly snapshots that are kept for 3 years.
+and monthly snapshots that are kept for 3 years. Delete old snapshots.
 
 ## Usage
 
@@ -32,6 +33,8 @@ Flags:
                                 multiple times. ISO 8601 Duration string
                                 format. Example: `--window P1M=PT1H` ==
                                 keep hourly snapshots for 1 month.
+  -d, --delete                  If set, clean up old snapshots. This is
+                                false be default for safety's sake.
       --repo="backups"          Name of the snapshot repository.
       --type=TYPE               If set, create a repository of this type
                                 before creating snapshots. See also:

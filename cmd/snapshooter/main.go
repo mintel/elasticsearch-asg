@@ -30,6 +30,7 @@ var (
 		"P3M=P1W",
 		"P3Y=P1M",
 	).StringMap()
+	delete       = kingpin.Flag("delete", "If set, clean up old snapshots. This is false be default for safety's sake.").Short('d').Bool()
 	repoName     = kingpin.Flag("repo", "Name of the snapshot repository.").Default("backups").String()
 	repoType     = kingpin.Flag("type", "If set, create a repository of this type before creating snapshots. See also: '--settings'").String()
 	repoSettings = kingpin.Flag("settings", "Use these settings creating the snapshot repository. May be set multiple times. Example: `--type=s3 --settings bucket=my_bucket`").StringMap()
@@ -111,6 +112,10 @@ func main() {
 				zap.String("snapshot_name", snapshotName),
 				zap.Error(err),
 			)
+		}
+
+		if !*delete {
+			continue
 		}
 
 		// Clean up old snapshots
