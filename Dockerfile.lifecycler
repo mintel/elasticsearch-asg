@@ -22,10 +22,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source
-COPY *.go ./
-COPY pkg ./pkg
-ARG CMD
-COPY cmd/${CMD} ./cmd/${CMD}
+COPY . .
 
 # Install/Update packages (after src COPY so it always happens)
 RUN apt-get update -y \
@@ -34,7 +31,7 @@ RUN apt-get update -y \
     && update-ca-certificates
 
 # Build the binary
-RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/${CMD} ./cmd/${CMD}
+RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/lifecycler ./cmd/lifecycler
 
 ##########################
 # STAGE 2 deployment image
@@ -47,7 +44,7 @@ COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy our static executable.
-COPY --from=builder /go/bin/${CMD} /usr/bin/${CMD}
+COPY --from=builder /go/bin/lifecycler /usr/bin/lifecycler
 
 # Use an unprivileged user.
 USER ${GOUSER}
@@ -56,4 +53,4 @@ USER ${GOUSER}
 ENV PORT=8080
 EXPOSE $PORT
 
-ENTRYPOINT ["/usr/bin/${CMD}"]
+ENTRYPOINT ["/usr/bin/lifecycler"]
