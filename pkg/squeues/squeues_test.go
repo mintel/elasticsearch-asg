@@ -58,8 +58,8 @@ func setup(t *testing.T) (*SQS, *mockSQSClient, context.Context, func(), func())
 	originalDefaultPollTime := DefaultPollTime
 	originalSendVisRandomizationFactor := sendVisRandomizationFactor
 
-	DefaultInitialVisibilityTimeout = 10 * time.Millisecond
-	DefaultMaxVisibilityTimeout = 60 * time.Millisecond
+	DefaultInitialVisibilityTimeout = 50 * time.Millisecond
+	DefaultMaxVisibilityTimeout = 300 * time.Millisecond
 	changeVisBuffer = 0
 	visTimeoutIncrement = time.Millisecond
 	DefaultPollTime = 20 * time.Millisecond
