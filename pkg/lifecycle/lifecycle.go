@@ -11,6 +11,8 @@ import (
 	"errors"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
@@ -127,8 +129,10 @@ func (e *Event) Timeout() time.Time {
 	t := e.Start.Add(time.Duration(e.heartbeatCount+1) * e.HeartbeatTimeout)
 	gt := e.GlobalTimeout()
 	if t.Before(gt) {
+		zap.L().Debug("chose timeout")
 		return t
 	}
+	zap.L().Debug("chose global timeout")
 	return gt
 }
 
@@ -140,7 +144,9 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 	var stopCheck chan error
 	var stopHeartbeat chan error
 
-	d := time.Until(e.Timeout()) - commBufD
+	timeout := e.Timeout()
+	d := time.Until(timeout) - commBufD
+	zap.L().Debug("initial d", zap.Time("timeout", timeout), zap.Duration("d", d))
 	if d < 0 {
 		return context.DeadlineExceeded
 	}
@@ -148,22 +154,28 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 	for {
 		select {
 		case <-ctx.Done():
+			zap.L().Debug("context done")
 			return ctx.Err()
 
 		case <-startCheck:
+			zap.L().Debug("case: startCheck")
 			startCheck = nil                // Disable start check case
 			stopCheck = make(chan error, 1) // Enable stop check case
 			go func() {
 				if ok, err := c(ctx, e); err != nil {
+					zap.L().Debug("check errored", zap.Error(err))
 					stopCheck <- err
 				} else if ok {
+					zap.L().Debug("check passed")
 					stopCheck <- nil
 				} else {
+					zap.L().Debug("check failed")
 					close(stopCheck)
 				}
 			}()
 
 		case err, ok := <-stopCheck:
+			zap.L().Debug("case: stopCheck", zap.Bool("ok", ok), zap.Error(err))
 			stopCheck = nil // Disable stop check case
 			if err != nil {
 				return err
@@ -172,7 +184,9 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 			}
 
 			e.heartbeatCount++
-			d = time.Until(e.Timeout()) - commBufD
+			timeout = e.Timeout()
+			d = time.Until(timeout) - commBufD
+			zap.L().Debug("new d", zap.Time("timeout", timeout), zap.Duration("d", d))
 			if d < 0 {
 				return context.DeadlineExceeded
 			}
@@ -189,6 +203,7 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 			}()
 
 		case err := <-stopHeartbeat:
+			zap.L().Debug("case: stopHeartbeat")
 			stopHeartbeat = nil // Disable stop heartbeat case
 			if err != nil {
 				return err

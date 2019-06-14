@@ -29,7 +29,6 @@ var (
 	transition     = TransitionLaunching
 	hTimeout       = 10 * time.Millisecond
 	hGlobalTimeout = 100 * hTimeout
-	start          = time.Now().UTC().Round(time.Millisecond)
 )
 
 type mockAutoscalingClient struct {
@@ -97,6 +96,7 @@ func TestNewEventFromMsg(t *testing.T) {
 	}
 	m.On("DescribeLifecycleHooksWithContext", anyCtx, mIn, nilReqOpts).Once().Return(mOut, error(nil))
 
+	start := time.Now().UTC().Round(time.Millisecond)
 	input := fmt.Sprintf(`{
 		"AutoScalingGroupName": "%s",
 		"Service": "AWS Auto Scaling",
@@ -147,6 +147,7 @@ func TestNewEventFromMsg_testEvent(t *testing.T) {
 	}
 	m.On("DescribeLifecycleHooksWithContext", anyCtx, mIn, nilReqOpts).Once().Return(mOut, error(nil))
 
+	start := time.Now().UTC().Round(time.Millisecond)
 	input := fmt.Sprintf(`{
 		"AutoScalingGroupName": "%s",
 		"Service": "AWS Auto Scaling",
@@ -187,6 +188,7 @@ func TestNewEventFromMsg_badTransition(t *testing.T) {
 	}
 	m.On("DescribeLifecycleHooksWithContext", anyCtx, mIn, nilReqOpts).Once().Return(mOut, error(nil))
 
+	start := time.Now().UTC().Round(time.Millisecond)
 	input := fmt.Sprintf(`{
 		"AutoScalingGroupName": "%s",
 		"Service": "AWS Auto Scaling",
@@ -226,6 +228,7 @@ func TestNewEventFromMsg_errUnmarshal(t *testing.T) {
 	}
 	m.On("DescribeLifecycleHooksWithContext", anyCtx, mIn, nilReqOpts).Once().Return(mOut, error(nil))
 
+	start := time.Now().UTC().Round(time.Millisecond)
 	input := fmt.Sprintf(`{
 		"AutoScalingGroupName": "%s",
 		"Service": "AWS Auto Scaling",
@@ -265,7 +268,7 @@ func TestKeepAlive(t *testing.T) {
 		HeartbeatTimeout:       hTimeout,
 		LifecycleHookName:      hookName,
 		LifecycleTransition:    transition,
-		Start:                  start,
+		Start:                  time.Now().UTC().Round(time.Millisecond),
 	}
 
 	cond := func(ctx context.Context, e *Event) (bool, error) {
