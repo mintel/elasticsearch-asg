@@ -4,8 +4,6 @@
 
 FROM golang:1.12 AS builder
 
-ARG CMD
-
 # Set Go build env vars
 ARG GOOS=linux
 ARG GOARCH=amd64
@@ -24,7 +22,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source
-COPY . .
+COPY *.go ./
+COPY pkg ./pkg
+ARG CMD
+COPY cmd/${CMD} ./cmd/${CMD}
 
 # Install/Update packages (after src COPY so it always happens)
 RUN apt-get update -y \
