@@ -36,9 +36,6 @@ RUN apt-get update -y \
 # The -race flag requires CGO_ENABLED=1
 RUN CGO_ENABLED=1 go test -timeout 30s -race -short -v ./...
 
-# Build the selfcheck binary
-RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/selfcheck ./cmd/selfcheck
-
 # Build the binary
 RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/${CMD} ./cmd/${CMD}
 
@@ -53,7 +50,6 @@ COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy our static executable.
-COPY --from=builder /go/bin/selfcheck /usr/bin/selfcheck
 COPY --from=builder /go/bin/${CMD} /usr/bin/${CMD}
 
 # Use an unprivileged user.
@@ -62,7 +58,5 @@ USER ${GOUSER}
 # Expose healthcheck port.
 ENV PORT=8080
 EXPOSE $PORT
-
-HEALTHCHECK --interval=60s --timeout=1s --start-period=2s --retries=3 CMD ["/usr/bin/selfcheck"]
 
 ENTRYPOINT ["/usr/bin/${CMD}"]
