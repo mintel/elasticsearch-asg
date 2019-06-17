@@ -87,13 +87,13 @@ func main() {
 	queue := squeues.New(sqsClient, *queueURL)
 	err = queue.Run(ctx, func(ctx context.Context, m *sqs.Message) error {
 		event, err := lifecycle.NewEventFromMsg(ctx, asClient, []byte(*m.Body))
-		startHeartbeatCount := event.HeartbeatCount
 		if err == lifecycle.ErrTestEvent {
 			return nil
 		} else if err != nil {
 			logger.Debug("got sqs message", zap.String("body", *m.Body))
 			return err
 		}
+		startHeartbeatCount := event.HeartbeatCount
 		ctx = WithEvent(ctx, event)
 		logger := Logger(ctx)
 		logger.Info(
