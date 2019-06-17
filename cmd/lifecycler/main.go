@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -83,9 +85,9 @@ func main() {
 	}
 
 	queue := squeues.New(sqsClient, *queueURL)
-
 	err = queue.Run(ctx, func(ctx context.Context, m *sqs.Message) error {
 		event, err := lifecycle.NewEventFromMsg(ctx, asClient, []byte(*m.Body))
+		startHeartbeatCount := event.HeartbeatCount
 		if err == lifecycle.ErrTestEvent {
 			return nil
 		} else if err != nil {
@@ -152,7 +154,43 @@ func main() {
 		}
 
 		logger.Debug("waiting for condition to pass")
-		return lifecycle.KeepAlive(ctx, asClient, event, cond)
+		err = lifecycle.KeepAlive(ctx, asClient, event, cond)
+		if err == lifecycle.ErrExpired {
+			// Lifecycle event has expired. Just delete the SQS message.
+			logger.Info("lifecycle event already expired")
+			err = nil
+
+		} else if aerr, ok := err.(awserr.Error); ok && strings.Contains(aerr.Message(), "No active Lifecycle Action found with token") {
+			// lifecycler should be able to tell when an event has timed out.
+			// This error is thrown if lifecycler called RecordLifecycleActionHeartbeat(), but the
+			// event already expired; it should never happen.
+			logger.Panic("lifecycle event expired, but lifecycler somehow didn't know")
+
+		} else if err != nil && event.HeartbeatCount != startHeartbeatCount {
+			// There's no AWS built-in way AFAIK to tell how many times the heartbeat has been recorded.
+			// We'll get around that by deleting the original message and sending a new one to the
+			// queue that contains the HeartbeatCount.
+			logger.Info("error during KeepAlive; sending message back to queue", zap.Error(err))
+			body, err := json.Marshal(event)
+			if err != nil {
+				logger.Panic("error serializing event to send back to SQS", zap.Error(err))
+			}
+			_, err = sqsClient.SendMessage(&sqs.SendMessageInput{
+				QueueUrl:    queueURL,
+				MessageBody: aws.String(string(body)),
+			})
+			if err != nil {
+				logger.Panic("error sending message back to SQS", zap.Error(err))
+			}
+			_, err = sqsClient.DeleteMessage(&sqs.DeleteMessageInput{
+				QueueUrl:      queueURL,
+				ReceiptHandle: m.ReceiptHandle,
+			})
+			if err != nil {
+				logger.Panic("error deleting message from SQS", zap.Error(err))
+			}
+		}
+		return err
 	})
 	if err != nil {
 		logger.Fatal("error handling SQS lifecycle messages", zap.Error(err))

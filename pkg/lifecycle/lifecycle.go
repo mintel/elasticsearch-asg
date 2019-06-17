@@ -35,6 +35,9 @@ var (
 
 	// ErrUnmarshal is returned when a unmarshalled JSON string doesn't appear to be a lifecycle event.
 	ErrUnmarshal = errors.New("data is not a lifecycle event message")
+
+	// ErrExpired is returned when a lifecycle event should be expried according to its timeout and start timestamp.
+	ErrExpired = errors.New("lifecycle event has expired")
 )
 
 // Transition is an enum representing the possible AWS Autoscaling Group
@@ -88,7 +91,8 @@ type Event struct {
 	// The time the event started.
 	Start time.Time `json:"Time"`
 
-	heartbeatCount int
+	// Number of times a heartbeat has been recorded for this event.
+	HeartbeatCount int `json:"HeartbeatCount,omitempty"`
 }
 
 // NewEventFromMsg creates a new event from a lifecycle message.
@@ -126,7 +130,7 @@ func (e *Event) GlobalTimeout() time.Time {
 
 // Timeout returns the time that the lifecycle event will expire.
 func (e *Event) Timeout() time.Time {
-	t := e.Start.Add(time.Duration(e.heartbeatCount+1) * e.HeartbeatTimeout)
+	t := e.Start.Add(time.Duration(e.HeartbeatCount+1) * e.HeartbeatTimeout)
 	gt := e.GlobalTimeout()
 	if t.Before(gt) {
 		zap.L().Debug("chose timeout")
@@ -137,6 +141,8 @@ func (e *Event) Timeout() time.Time {
 }
 
 // KeepAlive keeps a lifecycle event in the Transition:Wait state as long as condition c returns false.
+//
+// The condition is is only checked just before the lifecycle event is due to expire.
 func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *Event, c func(context.Context, *Event) (bool, error)) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -147,8 +153,8 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 	timeout := e.Timeout()
 	d := time.Until(timeout) - commBufD
 	zap.L().Debug("initial d", zap.Time("timeout", timeout), zap.Duration("d", d))
-	if d < 0 {
-		return context.DeadlineExceeded
+	if d <= 0 {
+		return ErrExpired
 	}
 	startCheck := time.After(d)
 	for {
@@ -159,8 +165,8 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 
 		case <-startCheck:
 			zap.L().Debug("case: startCheck")
-			startCheck = nil                // Disable start check case
-			stopCheck = make(chan error, 1) // Enable stop check case
+			startCheck = nil                // Disable startCheck case
+			stopCheck = make(chan error, 1) // Enable stopCheck case
 			go func() {
 				if ok, err := c(ctx, e); err != nil {
 					zap.L().Debug("check errored", zap.Error(err))
@@ -176,35 +182,42 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 
 		case err, ok := <-stopCheck:
 			zap.L().Debug("case: stopCheck", zap.Bool("ok", ok), zap.Error(err))
-			stopCheck = nil // Disable stop check case
-			if err != nil {
+			if err != nil { // check errored
 				return err
-			} else if ok {
+			} else if ok { // check returned true
 				return nil
-			}
+			} // else check returned false
 
-			e.heartbeatCount++
+			stopCheck = nil // Disable stop check case
+
+			// Schedule the next check.
+			e.HeartbeatCount++
 			timeout = e.Timeout()
 			d = time.Until(timeout) - commBufD
 			zap.L().Debug("new d", zap.Time("timeout", timeout), zap.Duration("d", d))
-			if d < 0 {
-				return context.DeadlineExceeded
+			if d <= 0 {
+				return ErrExpired
 			}
-			startCheck = time.After(d)
+			startCheck = time.After(d) // Enable startCheck case
 
-			stopHeartbeat = make(chan error, 1) // Enable stop heartbeat case
+			// Record the heartbeat
+			stopHeartbeat = make(chan error, 1) // Enable stopHeartbeat case
 			go func() {
+				defer close(stopHeartbeat)
 				_, err = client.RecordLifecycleActionHeartbeatWithContext(ctx, &autoscaling.RecordLifecycleActionHeartbeatInput{
 					AutoScalingGroupName: aws.String(e.AutoScalingGroupName),
 					LifecycleHookName:    aws.String(e.LifecycleHookName),
 					LifecycleActionToken: aws.String(e.LifecycleActionToken),
 				})
+				if err != nil {
+					e.HeartbeatCount-- // Undo heartbeat increment
+				}
 				stopHeartbeat <- err
 			}()
 
 		case err := <-stopHeartbeat:
 			zap.L().Debug("case: stopHeartbeat")
-			stopHeartbeat = nil // Disable stop heartbeat case
+			stopHeartbeat = nil // Disable stopHeartbeat case
 			if err != nil {
 				return err
 			}

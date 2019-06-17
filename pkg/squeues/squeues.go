@@ -70,11 +70,11 @@ func New(client sqsiface.SQSAPI, queueURL string) *SQS {
 }
 
 // Run consumes messages from the SQS queue and calls handleF as a goroutine for each.
+//
 // While handleF is running, the message will periodically have its visibility timeout updated
-// to keep the message reserved.
-// If handleF or any communication with AWS returns a error, the context will be cancel and
-// the error returned.
-// If the context is otherwise canceled, context.Canceled will be returned.
+// to keep the message reserved. If handleF or any communication with AWS returns a error,
+// the context will be canceled and the error returned. If handleF returns without error,
+// the message will be deleted from SQS.
 func (q *SQS) Run(ctx context.Context, handleF func(context.Context, *sqs.Message) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
