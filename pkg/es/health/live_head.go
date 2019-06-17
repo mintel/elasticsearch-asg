@@ -32,7 +32,7 @@ func CheckLiveHEAD(ctx context.Context, URL string) healthcheck.Check {
 
 		if resp.StatusCode != 200 {
 			const msg = "HEAD request returned non-200 status code"
-			logger.Info(msg, zap.Int("status_code", resp.StatusCode))
+			logger.Debug(msg, zap.Int("status_code", resp.StatusCode))
 			return errors.New(msg)
 		}
 
