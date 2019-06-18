@@ -101,11 +101,11 @@ func NewEventFromMsg(ctx context.Context, client autoscalingiface.AutoScalingAPI
 	if err := json.Unmarshal(data, e); err != nil {
 		return nil, err
 	}
-	if e.LifecycleHookName == "" {
-		return nil, ErrUnmarshal
-	}
 	if e.Event == TestEvent {
 		return nil, ErrTestEvent
+	}
+	if e.LifecycleHookName == "" {
+		return nil, ErrUnmarshal
 	}
 	if !(e.LifecycleTransition == TransitionTerminating || e.LifecycleTransition == TransitionLaunching) {
 		return nil, ErrUnknownTransition
