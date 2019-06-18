@@ -103,6 +103,7 @@ func main() {
 		)
 
 		var cond func(ctx context.Context, e *lifecycle.Event) (bool, error)
+		cleanupFns := make([]func(), 0) // Don't use defer because we don't want to run these in case of error.
 		if event.LifecycleTransition == lifecycle.TransitionLaunching {
 			cond = launchCondition(esClient)
 		} else {
@@ -121,14 +122,14 @@ func main() {
 			if err != nil {
 				return err
 			}
-			defer func() {
+			cleanupFns = append(cleanupFns, func() {
 				drainLock.Lock()
 				defer drainLock.Unlock()
 				err := s.Undrain(ctx, n.Name)
 				if err != nil {
 					logger.Fatal("error undraining node", zap.Error(err))
 				}
-			}()
+			})
 
 			// Exclude node from master voting
 			if n.IsMaster() {
@@ -140,7 +141,7 @@ func main() {
 				}
 				atomic.AddInt32(&votingCount, 1)
 				votingLock.Unlock()
-				defer func() {
+				cleanupFns = append(cleanupFns, func() {
 					votingLock.Lock()
 					defer votingLock.Unlock()
 					if atomic.AddInt32(&votingCount, -1) == 0 {
@@ -149,7 +150,7 @@ func main() {
 							logger.Fatal("error clearing voting exclusion configuration", zap.Error(err))
 						}
 					}
-				}()
+				})
 			}
 		}
 
@@ -192,6 +193,9 @@ func main() {
 
 		} else if err == nil {
 			logger.Info("completed lifecycle event successfully")
+			for i := len(cleanupFns) - 1; i >= 0; i-- {
+				cleanupFns[i]()
+			}
 		}
 		return err
 	})
