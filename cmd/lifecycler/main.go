@@ -189,6 +189,9 @@ func main() {
 			if err != nil {
 				logger.Panic("error deleting message from SQS", zap.Error(err))
 			}
+
+		} else if err == nil {
+			logger.Info("completed lifecycle event successfully")
 		}
 		return err
 	})
