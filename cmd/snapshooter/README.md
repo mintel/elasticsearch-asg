@@ -1,4 +1,4 @@
-# elasticsearch-snapshooter
+# snapshooter
 
 Create and clean up Elasticsearch snapshots on a schedule.
 
