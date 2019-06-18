@@ -3,6 +3,7 @@ package esasg
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -169,11 +170,13 @@ func (s *ElasticsearchService) Node(ctx context.Context, name string) (*Node, er
 	if err != nil {
 		return nil, err
 	} else if len(nodes) != 1 {
-		return nil, errors.New("got wrong number of nodes")
+		return nil, fmt.Errorf("got wrong number of nodes (%d)", len(nodes))
 	}
 	n, ok := nodes[name]
 	if !ok {
-		return nil, errors.New("got node with wrong name")
+		for k := range nodes {
+			return nil, fmt.Errorf("got node with wrong name (%s)", k)
+		}
 	}
 	return n, nil
 }
