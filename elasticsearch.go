@@ -153,18 +153,13 @@ func (s *ElasticsearchService) Node(ctx context.Context, name string) (*Node, er
 
 // Drain excludes a node from shard allocation, which will cause Elasticsearch
 // to remove shards from the node until empty.
-func (s *ElasticsearchService) Drain(ctx context.Context, n *Node) error {
-	_, err := s.client.SyncedFlush(n.Indices()...).Do(ctx)
-	if err != nil {
-		return err
-	}
-
+func (s *ElasticsearchService) Drain(ctx context.Context, nodeName string) error {
 	resp, err := es.NewClusterGetSettingsService(s.client).Do(ctx)
 	if err != nil {
 		return err
 	}
 	settings := newshardAllocationExcludeSettings(resp.Transient)
-	settings.Name = append(settings.Name, n.Name)
+	settings.Name = append(settings.Name, nodeName)
 	sort.Strings(settings.Name)
 	// ignore everything but name
 	settings.IP = nil
@@ -175,7 +170,7 @@ func (s *ElasticsearchService) Drain(ctx context.Context, n *Node) error {
 }
 
 // Undrain reverses Drain.
-func (s *ElasticsearchService) Undrain(ctx context.Context, n *Node) error {
+func (s *ElasticsearchService) Undrain(ctx context.Context, nodeName string) error {
 	resp, err := es.NewClusterGetSettingsService(s.client).Do(ctx)
 	if err != nil {
 		return err
@@ -184,7 +179,7 @@ func (s *ElasticsearchService) Undrain(ctx context.Context, n *Node) error {
 	found := false
 	filtered := settings.Name[:0]
 	for _, name := range settings.Name {
-		if name == n.Name {
+		if name == nodeName {
 			found = true
 		} else {
 			filtered = append(filtered, name)

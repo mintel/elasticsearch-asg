@@ -116,7 +116,7 @@ func main() {
 
 			// Drain shards from node
 			drainLock.Lock()
-			err = s.Drain(ctx, n)
+			err = s.Drain(ctx, n.Name)
 			drainLock.Unlock()
 			if err != nil {
 				return err
@@ -124,7 +124,7 @@ func main() {
 			defer func() {
 				drainLock.Lock()
 				defer drainLock.Unlock()
-				err := s.Undrain(ctx, n)
+				err := s.Undrain(ctx, n.Name)
 				if err != nil {
 					logger.Fatal("error undraining node", zap.Error(err))
 				}
@@ -134,7 +134,7 @@ func main() {
 			if n.IsMaster() {
 				votingLock.Lock()
 				logger.Debug("settings master voting exclusion")
-				if _, err = es.NewClusterPostVotingConfigExclusion(esClient).Node(event.InstanceID).Do(ctx); err != nil {
+				if _, err = es.NewClusterPostVotingConfigExclusion(esClient).Node(n.Name).Do(ctx); err != nil {
 					votingLock.Unlock()
 					return err
 				}
