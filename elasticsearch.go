@@ -7,14 +7,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mintel/elasticsearch-asg/pkg/str"
-
 	elastic "github.com/olivere/elastic/v7"
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 	tomb "gopkg.in/tomb.v2"
 
 	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
 
 const shardAllocExcludeSetting = "cluster.routing.allocation.exclude"
