@@ -139,7 +139,7 @@ func main() {
 			// Exclude node from master voting
 			if n.IsMaster() {
 				votingLock.Lock()
-				logger.Debug("settings master voting exclusion")
+				logger.Debug("setting master voting exclusion")
 				if _, err = es.NewClusterPostVotingConfigExclusion(esClient).Node(n.Name).Do(ctx); err != nil {
 					votingLock.Unlock()
 					return err
