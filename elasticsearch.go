@@ -18,6 +18,15 @@ import (
 
 const shardAllocExcludeSetting = "cluster.routing.allocation.exclude"
 
+var (
+	// ErrInconsistentNodes is returned when ElasticsearchService.Nodes()
+	// gets different sets of nodes from Elasticsearch across API calls.
+	ErrInconsistentNodes = errors.New("got inconsistent nodes from Elasticsearch")
+
+	// In case of ErrInconsistentNodes, retry this many times before giving up.
+	defaultInconsistentNodesRetries = 3
+)
+
 // ElasticsearchService provides methods to perform some common tasks
 // that the lower-level elastic client doesn't provide.
 type ElasticsearchService struct {
@@ -37,6 +46,24 @@ func NewElasticsearchService(client *elastic.Client) *ElasticsearchService {
 // as a map from node name to Node.
 // If names are past, limit to nodes with those names.
 func (s *ElasticsearchService) Nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
+	var result map[string]*Node
+	var err error
+	tries := defaultInconsistentNodesRetries
+	for tryCounter := 0; tryCounter < tries; tryCounter++ {
+		result, err = s.nodes(ctx, names...)
+		if err == nil {
+			return result, nil
+		}
+		zap.L().Warn("got error describing Elasticsearch nodes",
+			zap.Error(err),
+			zap.Int("try", tryCounter+1),
+			zap.Int("max_tries", tries),
+		)
+	}
+	return result, err
+}
+
+func (s *ElasticsearchService) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
 	t, ctx := tomb.WithContext(ctx)
 
 	var statsResp *elastic.NodesStatsResponse
@@ -98,7 +125,7 @@ func (s *ElasticsearchService) Nodes(ctx context.Context, names ...string) (map[
 	}
 
 	if len(statsResp.Nodes) != len(infoResp.Nodes) {
-		panic("got different numbers of nodes")
+		return nil, ErrInconsistentNodes
 	}
 	nodes := make(map[string]*Node, len(statsResp.Nodes))
 	for _, ni := range infoResp.Nodes {
@@ -121,14 +148,14 @@ func (s *ElasticsearchService) Nodes(ctx context.Context, names ...string) (map[
 	for _, ns := range statsResp.Nodes {
 		n, ok := nodes[ns.Name]
 		if !ok {
-			panic("got different nodes")
+			return nil, ErrInconsistentNodes
 		}
 		n.Stats = *ns
 	}
 	for _, sr := range shardsResp {
 		n, ok := nodes[sr.Node]
 		if !ok {
-			panic("got different nodes")
+			return nil, ErrInconsistentNodes
 		}
 		n.Shards = append(n.Shards, sr)
 	}
