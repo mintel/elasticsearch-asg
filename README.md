@@ -1,6 +1,7 @@
 # elasticsearch-asg
 
 A number of little tools I needed setting up Elasticsearch as AWS Autoscaling Groups.
+These target Elasticsearch >= 7.0.
 
 - [cloudwatcher](cmd/cloudwatcher) - Push metrics about Elasticsearch cluster to AWS CloudWatch, mainly for autoscaling.
 - [healthcheck](cmd/healthcheck) - Provide health and readiness checks for Elasticsearch.
