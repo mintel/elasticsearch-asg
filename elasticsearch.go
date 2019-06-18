@@ -3,7 +3,6 @@ package esasg
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -45,6 +44,7 @@ func NewElasticsearchService(client *elastic.Client) *ElasticsearchService {
 // Nodes returns info and stats about the nodes in the Elasticsearch cluster,
 // as a map from node name to Node.
 // If names are past, limit to nodes with those names.
+// It's left up to the caller to check if all the names are in the response.
 func (s *ElasticsearchService) Nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
 	var result map[string]*Node
 	var err error
@@ -194,20 +194,13 @@ func (s *ElasticsearchService) nodes(ctx context.Context, names ...string) (map[
 }
 
 // Node returns a single node with the given name.
+// Will return nil if the node doesn't exist.
 func (s *ElasticsearchService) Node(ctx context.Context, name string) (*Node, error) {
 	nodes, err := s.Nodes(ctx, name)
 	if err != nil {
 		return nil, err
-	} else if len(nodes) != 1 {
-		return nil, fmt.Errorf("got wrong number of nodes (%d)", len(nodes))
 	}
-	n, ok := nodes[name]
-	if !ok {
-		for k := range nodes {
-			return nil, fmt.Errorf("got node with wrong name (%s)", k)
-		}
-	}
-	return n, nil
+	return nodes[name], nil
 }
 
 // Drain excludes a node from shard allocation, which will cause Elasticsearch

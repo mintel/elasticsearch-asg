@@ -114,6 +114,10 @@ func main() {
 			if err != nil {
 				return err
 			}
+			if n == nil {
+				logger.Info("node has already left Elasticsearch cluster")
+				return nil
+			}
 
 			// Drain shards from node
 			drainLock.Lock()
