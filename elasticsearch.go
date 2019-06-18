@@ -175,8 +175,9 @@ func (s *ElasticsearchService) nodes(ctx context.Context, names ...string) (map[
 		n.Stats = *ns
 	}
 	for _, sr := range shardsResp {
-		n, ok := nodes[sr.Node]
-		if !ok {
+		if n, ok := nodes[sr.Node]; ok {
+			n.Shards = append(n.Shards, sr)
+		} else if len(names) == 0 {
 			nodeNames := make([]string, 0, len(nodes))
 			for name := range nodes {
 				nodeNames = append(nodeNames, name)
@@ -187,7 +188,6 @@ func (s *ElasticsearchService) nodes(ctx context.Context, names ...string) (map[
 			)
 			return nil, ErrInconsistentNodes
 		}
-		n.Shards = append(n.Shards, sr)
 	}
 
 	return nodes, nil
