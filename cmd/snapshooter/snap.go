@@ -40,6 +40,8 @@ type SnapshotWindows []SnapshotWindow
 // Next retuns the next Time a snapshot should be created.
 // If this SnapshotWindows is empty, returns the zero Time.
 func (sws SnapshotWindows) Next() time.Time {
+	// Only one snapshot can be creating at the same time.
+	// TODO: Track past snapshot durations, predict future durations, and choose times that don't clobber each other.
 	return sws.next(time.Now().UTC())
 }
 
