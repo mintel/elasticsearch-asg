@@ -50,15 +50,17 @@ func (s *ElasticsearchService) Nodes(ctx context.Context, names ...string) (map[
 	var err error
 	tries := defaultInconsistentNodesRetries
 	for tryCounter := 0; tryCounter < tries; tryCounter++ {
+		if tryCounter > 0 {
+			zap.L().Warn("got error describing Elasticsearch nodes",
+				zap.Error(err),
+				zap.Int("try", tryCounter+1),
+				zap.Int("max_tries", tries),
+			)
+		}
 		result, err = s.nodes(ctx, names...)
 		if err == nil {
 			return result, nil
 		}
-		zap.L().Warn("got error describing Elasticsearch nodes",
-			zap.Error(err),
-			zap.Int("try", tryCounter+1),
-			zap.Int("max_tries", tries),
-		)
 	}
 	return result, err
 }
@@ -125,6 +127,18 @@ func (s *ElasticsearchService) nodes(ctx context.Context, names ...string) (map[
 	}
 
 	if len(statsResp.Nodes) != len(infoResp.Nodes) {
+		statsNodes := make([]string, 0, len(statsResp.Nodes))
+		for name := range statsResp.Nodes {
+			statsNodes = append(statsNodes, name)
+		}
+		infoNodes := make([]string, 0, len(infoResp.Nodes))
+		for name := range infoResp.Nodes {
+			infoNodes = append(infoNodes, name)
+		}
+		zap.L().Error("got info and stats responses of different lengths",
+			zap.Strings("stats_nodes", statsNodes),
+			zap.Strings("info_nodes", infoNodes),
+		)
 		return nil, ErrInconsistentNodes
 	}
 	nodes := make(map[string]*Node, len(statsResp.Nodes))
@@ -148,6 +162,14 @@ func (s *ElasticsearchService) nodes(ctx context.Context, names ...string) (map[
 	for _, ns := range statsResp.Nodes {
 		n, ok := nodes[ns.Name]
 		if !ok {
+			nodeNames := make([]string, 0, len(nodes))
+			for name := range nodes {
+				nodeNames = append(nodeNames, name)
+			}
+			zap.L().Error("got node in stats response that isn't in info response",
+				zap.String("name", ns.Name),
+				zap.Strings("nodes", nodeNames),
+			)
 			return nil, ErrInconsistentNodes
 		}
 		n.Stats = *ns
@@ -155,6 +177,14 @@ func (s *ElasticsearchService) nodes(ctx context.Context, names ...string) (map[
 	for _, sr := range shardsResp {
 		n, ok := nodes[sr.Node]
 		if !ok {
+			nodeNames := make([]string, 0, len(nodes))
+			for name := range nodes {
+				nodeNames = append(nodeNames, name)
+			}
+			zap.L().Error("got node in shards response that isn't in info or stats response",
+				zap.String("name", sr.Node),
+				zap.Strings("nodes", nodeNames),
+			)
 			return nil, ErrInconsistentNodes
 		}
 		n.Shards = append(n.Shards, sr)

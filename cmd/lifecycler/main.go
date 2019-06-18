@@ -125,6 +125,7 @@ func main() {
 			cleanupFns = append(cleanupFns, func() {
 				drainLock.Lock()
 				defer drainLock.Unlock()
+				logger.Debug("cleaning up shard allocation exclusions settings")
 				err := s.Undrain(ctx, n.Name)
 				if err != nil {
 					logger.Fatal("error undraining node", zap.Error(err))
@@ -145,6 +146,7 @@ func main() {
 					votingLock.Lock()
 					defer votingLock.Unlock()
 					if atomic.AddInt32(&votingCount, -1) == 0 {
+						logger.Debug("clearing voting exclusion configuration")
 						_, err := es.NewClusterDeleteVotingConfigExclusion(esClient).Wait(true).Do(ctx)
 						if err != nil {
 							logger.Fatal("error clearing voting exclusion configuration", zap.Error(err))
