@@ -61,9 +61,9 @@ func TestMakeCloudwatchData(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	es := esasg.NewElasticsearchService(client)
 
-	nodes, err := es.Nodes(context.TODO())
+	esQuery := esasg.NewElasticsearchQueryService(client)
+	nodes, err := esQuery.Nodes(context.TODO())
 	if !assert.NoError(t, err) {
 		return
 	}

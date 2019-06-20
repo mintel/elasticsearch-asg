@@ -65,11 +65,11 @@ func main() {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
 
-	esService := esasg.NewElasticsearchService(esClient)
+	esQuery := esasg.NewElasticsearchQueryService(esClient)
 
 	for range time.NewTicker(*interval).C {
 		go func() {
-			nodes, err := esService.Nodes(ctx)
+			nodes, err := esQuery.Nodes(ctx)
 			if err != nil {
 				logger.Fatal("error getting Elasticsearch nodes info", zap.Error(err))
 			}

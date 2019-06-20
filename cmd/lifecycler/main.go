@@ -21,7 +21,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 
 	esasg "github.com/mintel/elasticsearch-asg"
-	"github.com/mintel/elasticsearch-asg/pkg/es"
 	"github.com/mintel/elasticsearch-asg/pkg/lifecycle"
 	"github.com/mintel/elasticsearch-asg/pkg/squeues"
 )
@@ -41,12 +40,8 @@ var (
 )
 
 var (
-	// Only one goroutine should modify shards allocation exclusion settings at once
-	// because Elasticsearch doesn't provide an atomic way to modify settings.
-	drainLock sync.Mutex
-
 	// The Elasticsearch API only allows the clearing of all master voting exclusions at once,
-	// so only one goroutine should clean up the exclusions once all pending checks have finished.
+	// so only one goroutine should clean up the exclusions once all pending lifecycle events have finished.
 	votingLock  sync.Mutex
 	votingCount int32
 )
@@ -66,7 +61,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	region, err := RegionFromSQSURL(*queueURL)
+	region, err := SQSRegion(*queueURL)
 	if err != nil {
 		logger.Fatal("error parsing SQS URL", zap.Error(err))
 	}
@@ -83,6 +78,8 @@ func main() {
 	if err != nil {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
+	esQuery := esasg.NewElasticsearchQueryService(esClient)
+	esCommand := esasg.NewElasticsearchCommandService(esClient)
 
 	queue := squeues.New(sqsClient, *queueURL)
 	err = queue.Run(ctx, func(ctx context.Context, m *sqs.Message) error {
@@ -109,8 +106,7 @@ func main() {
 		} else {
 			cond = terminateCondition(esClient)
 
-			s := esasg.NewElasticsearchService(esClient)
-			n, err := s.Node(ctx, event.InstanceID)
+			n, err := esQuery.Node(ctx, event.InstanceID)
 			if err != nil {
 				return err
 			}
@@ -120,27 +116,21 @@ func main() {
 			}
 
 			// Drain shards from node
-			drainLock.Lock()
-			err = s.Drain(ctx, n.Name)
-			drainLock.Unlock()
-			if err != nil {
+			if err := esCommand.Drain(ctx, n.Name); err != nil {
 				return err
 			}
 			cleanupFns = append(cleanupFns, func() {
-				drainLock.Lock()
-				defer drainLock.Unlock()
 				logger.Debug("cleaning up shard allocation exclusions settings")
-				err := s.Undrain(ctx, n.Name)
-				if err != nil {
+				if err := esCommand.Undrain(ctx, n.Name); err != nil {
 					logger.Fatal("error undraining node", zap.Error(err))
 				}
 			})
 
 			// Exclude node from master voting
 			if n.IsMaster() {
-				votingLock.Lock()
 				logger.Debug("setting master voting exclusion")
-				if _, err = es.NewClusterPostVotingConfigExclusion(esClient).Node(n.Name).Do(ctx); err != nil {
+				votingLock.Lock()
+				if err := esCommand.ExcludeMasterVoting(ctx, n.Name); err != nil {
 					votingLock.Unlock()
 					return err
 				}
@@ -151,8 +141,7 @@ func main() {
 					defer votingLock.Unlock()
 					if atomic.AddInt32(&votingCount, -1) == 0 {
 						logger.Debug("clearing voting exclusion configuration")
-						_, err := es.NewClusterDeleteVotingConfigExclusion(esClient).Wait(true).Do(ctx)
-						if err != nil {
+						if err := esCommand.ClearMasterVotingExclusions(ctx); err != nil {
 							logger.Fatal("error clearing voting exclusion configuration", zap.Error(err))
 						}
 					}
@@ -210,9 +199,9 @@ func main() {
 	}
 }
 
-// RegionFromSQSURL parses an SQS queue URL to return the AWS region its in.
-func RegionFromSQSURL(qURL string) (string, error) {
-	u, err := url.Parse(qURL)
+// SQSRegion parses an SQS queue URL to return the AWS region its in.
+func SQSRegion(URL string) (string, error) {
+	u, err := url.Parse(URL)
 	if err != nil {
 		return "", err
 	}
@@ -249,7 +238,7 @@ func terminateCondition(client *elastic.Client) func(context.Context, *lifecycle
 		}
 
 		// Wait for shards to drain
-		if n, err := esasg.NewElasticsearchService(client).Node(ctx, event.InstanceID); err != nil {
+		if n, err := esasg.NewElasticsearchQueryService(client).Node(ctx, event.InstanceID); err != nil {
 			return false, err
 		} else if len(n.Indices()) > 0 {
 			logger.Info("condition failed: node still has shards")
