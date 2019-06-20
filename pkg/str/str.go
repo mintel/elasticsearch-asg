@@ -11,11 +11,12 @@ func In(v string, s ...string) bool {
 	return false
 }
 
-// Uniq returns unique strings.
+// Uniq returns a new slice containing only unique strings.
+// The order of the return value is undefined.
 func Uniq(strs ...string) []string {
-	m := make(map[string]bool, len(strs))
+	m := make(map[string]struct{}, len(strs))
 	for _, s := range strs {
-		m[s] = true
+		m[s] = struct{}{}
 	}
 	out := make([]string, 0, len(m))
 	for s := range m {
