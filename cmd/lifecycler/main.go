@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,7 +60,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	region, err := SQSRegion(*queueURL)
+	region, err := squeues.Region(*queueURL)
 	if err != nil {
 		logger.Fatal("error parsing SQS URL", zap.Error(err))
 	}
@@ -197,16 +196,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("error handling SQS lifecycle messages", zap.Error(err))
 	}
-}
-
-// SQSRegion parses an SQS queue URL to return the AWS region its in.
-func SQSRegion(URL string) (string, error) {
-	u, err := url.Parse(URL)
-	if err != nil {
-		return "", err
-	}
-	region := strings.Split(u.Host, ".")[1]
-	return region, nil
 }
 
 func terminateCondition(client *elastic.Client) func(context.Context, *lifecycle.Event) (bool, error) {
