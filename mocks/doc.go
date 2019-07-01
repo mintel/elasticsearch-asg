@@ -1,3 +1,6 @@
+//go:generate sh -c "mockery -output=./ -outpkg=mocks -name=ElasticsearchCommandService -dir=$(go list -f '{{.Dir}}' github.com/mintel/elasticsearch-asg)"
+//go:generate sh -c "mockery -output=./ -outpkg=mocks -name=ElasticsearchQueryService   -dir=$(go list -f '{{.Dir}}' github.com/mintel/elasticsearch-asg)"
+
 //go:generate sh -c "mockery -output=./ -outpkg=mocks -name=EC2API         -dir=$(go list -f '{{.Dir}}' github.com/aws/aws-sdk-go/service/ec2/ec2iface)"
 //go:generate sh -c "mockery -output=./ -outpkg=mocks -name=SQSAPI         -dir=$(go list -f '{{.Dir}}' github.com/aws/aws-sdk-go/service/sqs/sqsiface)"
 //go:generate sh -c "mockery -output=./ -outpkg=mocks -name=AutoScalingAPI -dir=$(go list -f '{{.Dir}}' github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface)"
