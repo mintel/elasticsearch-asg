@@ -16,17 +16,15 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+
+	"github.com/mintel/elasticsearch-asg/mocks"
 )
 
 const (
 	queueURL = "https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"
 	msgBody  = "i am a message body"
 )
-
-var nilReqOpts []request.Option
 
 func makeMsg() *sqs.Message {
 	b := make([]byte, 32)
@@ -44,7 +42,7 @@ func makeMsg() *sqs.Message {
 	}
 }
 
-func setup(t *testing.T) (*SQS, *mockSQSClient, context.Context, func(), func()) {
+func setup(t *testing.T) (*SQS, *mocks.SQSAPI, context.Context, func(), func()) {
 	logger := zaptest.NewLogger(t)
 	f1 := zap.ReplaceGlobals(logger)
 	f2 := zap.RedirectStdLog(logger)
@@ -65,7 +63,7 @@ func setup(t *testing.T) (*SQS, *mockSQSClient, context.Context, func(), func())
 	DefaultPollTime = 20 * time.Millisecond
 	sendVisRandomizationFactor = 0
 
-	m := &mockSQSClient{}
+	m := &mocks.SQSAPI{}
 	m.Test(t)
 
 	q := New(m, queueURL)
@@ -85,26 +83,6 @@ func setup(t *testing.T) (*SQS, *mockSQSClient, context.Context, func(), func())
 		}
 	}
 	return q, m, ctx, cancel, teardown
-}
-
-type mockSQSClient struct {
-	sqsiface.SQSAPI
-	mock.Mock
-}
-
-func (m *mockSQSClient) ReceiveMessageWithContext(ctx aws.Context, input *sqs.ReceiveMessageInput, opts ...request.Option) (*sqs.ReceiveMessageOutput, error) {
-	args := m.Called(ctx, input, opts)
-	return args.Get(0).(*sqs.ReceiveMessageOutput), args.Error(1)
-}
-
-func (m *mockSQSClient) ChangeMessageVisibilityWithContext(ctx aws.Context, input *sqs.ChangeMessageVisibilityInput, opts ...request.Option) (*sqs.ChangeMessageVisibilityOutput, error) {
-	args := m.Called(ctx, input, opts)
-	return args.Get(0).(*sqs.ChangeMessageVisibilityOutput), args.Error(1)
-}
-
-func (m *mockSQSClient) DeleteMessageWithContext(ctx aws.Context, input *sqs.DeleteMessageInput, opts ...request.Option) (*sqs.DeleteMessageOutput, error) {
-	args := m.Called(ctx, input, opts)
-	return args.Get(0).(*sqs.DeleteMessageOutput), args.Error(1)
 }
 
 func TestSQS_New(t *testing.T) {
@@ -127,19 +105,19 @@ func TestSQS_Run(t *testing.T) {
 			assert.Equal(t, *msg1.ReceiptHandle, *input.ReceiptHandle) &&
 			assert.InDelta(t, q.InitialVisibilityTimeout/visTimeoutIncrement, *input.VisibilityTimeout, float64(visTimeoutIncrement))
 	})
-	m.On("ChangeMessageVisibilityWithContext", anyCtx, msg1VisInput, nilReqOpts).Once().Return(&sqs.ChangeMessageVisibilityOutput{}, error(nil))
+	m.On("ChangeMessageVisibilityWithContext", mocks.AnyContext, msg1VisInput).Once().Return(&sqs.ChangeMessageVisibilityOutput{}, error(nil))
 	msg1DelInput := &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(q.queueURL),
 		ReceiptHandle: msg1.ReceiptHandle,
 	}
-	m.On("DeleteMessageWithContext", anyCtx, msg1DelInput, nilReqOpts).Once().Return(&sqs.DeleteMessageOutput{}, error(nil))
+	m.On("DeleteMessageWithContext", mocks.AnyContext, msg1DelInput).Once().Return(&sqs.DeleteMessageOutput{}, error(nil))
 
 	msg2 := makeMsg()
 	msg2DelInput := &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(q.queueURL),
 		ReceiptHandle: msg2.ReceiptHandle,
 	}
-	m.On("DeleteMessageWithContext", anyCtx, msg2DelInput, nilReqOpts).Once().Return(&sqs.DeleteMessageOutput{}, error(nil))
+	m.On("DeleteMessageWithContext", mocks.AnyContext, msg2DelInput).Once().Return(&sqs.DeleteMessageOutput{}, error(nil))
 
 	expectedReceiveInput := &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(q.queueURL),
@@ -147,9 +125,9 @@ func TestSQS_Run(t *testing.T) {
 		VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
 		WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
 	}
-	m.On("ReceiveMessageWithContext", anyCtx, expectedReceiveInput, nilReqOpts).After(q.PollTime/2).Once().Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{msg1, msg2}}, error(nil))
+	m.On("ReceiveMessageWithContext", mocks.AnyContext, expectedReceiveInput).After(q.PollTime/2).Once().Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{msg1, msg2}}, error(nil))
 	// Additional receives return no messages
-	m.On("ReceiveMessageWithContext", anyCtx, expectedReceiveInput, nilReqOpts).After(q.PollTime).Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{}}, error(nil))
+	m.On("ReceiveMessageWithContext", mocks.AnyContext, expectedReceiveInput).After(q.PollTime).Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{}}, error(nil))
 
 	handleF := func(ctx context.Context, msg *sqs.Message) error {
 		args := m.MethodCalled("handleF", ctx, msg)
@@ -158,8 +136,8 @@ func TestSQS_Run(t *testing.T) {
 		}
 		return args.Error(0)
 	}
-	m.On("handleF", anyCtx, msg1).After(msg1Delay).Once().Return(error(nil))
-	m.On("handleF", anyCtx, msg2).Once().Return(error(nil))
+	m.On("handleF", mocks.AnyContext, msg1).After(msg1Delay).Once().Return(error(nil))
+	m.On("handleF", mocks.AnyContext, msg2).Once().Return(error(nil))
 
 	shouldFinishIn := q.PollTime/2 + msg1Delay + 10*time.Millisecond
 	doCancel := time.AfterFunc(shouldFinishIn, cancel)
@@ -183,7 +161,6 @@ func TestSQS_receive_success(t *testing.T) {
 			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
 			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
 		},
-		nilReqOpts,
 	).Return(
 		&sqs.ReceiveMessageOutput{
 			Messages: []*sqs.Message{msg},
@@ -214,7 +191,6 @@ func TestSQS_receive_failure(t *testing.T) {
 			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
 			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
 		},
-		nilReqOpts,
 	).Return(
 		(*sqs.ReceiveMessageOutput)(nil),
 		want,
@@ -234,14 +210,13 @@ func TestSQS_receive_ctxCancel(t *testing.T) {
 
 	finishIn := q.InitialVisibilityTimeout / 2
 	m.On("ReceiveMessageWithContext",
-		anyCtx,
+		mocks.AnyContext,
 		&sqs.ReceiveMessageInput{
 			QueueUrl:            aws.String(q.queueURL),
 			MaxNumberOfMessages: aws.Int64(1),
 			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
 			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
 		},
-		nilReqOpts,
 	).After(finishIn).Return((*sqs.ReceiveMessageOutput)(nil), context.Canceled)
 	results := make(chan []*sqs.Message)
 
@@ -267,7 +242,7 @@ func TestSQS_handle_success(t *testing.T) {
 		return args.Error(0)
 	}
 
-	m.On("handleF", anyCtx, msg).Return(error(nil))
+	m.On("handleF", mocks.AnyContext, msg).Return(error(nil))
 	errc := q.handle(ctx, handleF, msg, done, postpone)
 	assert.NoError(t, <-errc)
 	close(postpone)
@@ -290,7 +265,7 @@ func TestSQS_handle_postpone(t *testing.T) {
 	}
 
 	finishIn := q.InitialVisibilityTimeout + visTimeoutIncrement
-	m.On("handleF", anyCtx, msg).After(finishIn).Return(error(nil))
+	m.On("handleF", mocks.AnyContext, msg).After(finishIn).Return(error(nil))
 
 	now := time.Now()
 	err := <-q.handle(ctx, handleF, msg, done, postpone)
@@ -322,7 +297,7 @@ func TestSQS_handle_failure(t *testing.T) {
 	}
 
 	want := errors.New("test error")
-	m.On("handleF", anyCtx, msg).Return(want)
+	m.On("handleF", mocks.AnyContext, msg).Return(want)
 	errc := q.handle(ctx, handleF, msg, done, postpone)
 	assert.Equal(t, want, <-errc)
 	close(postpone)
@@ -347,7 +322,7 @@ func TestSQS_handle_ctxCancel(t *testing.T) {
 	}
 
 	finishIn := q.InitialVisibilityTimeout / 2
-	m.On("handleF", anyCtx, msg).After(finishIn).Return(error(nil))
+	m.On("handleF", mocks.AnyContext, msg).After(finishIn).Return(error(nil))
 
 	doCancel := time.AfterFunc(finishIn/2, cancel)
 	err := <-q.handle(ctx, handleF, msg, done, postpone)
@@ -369,13 +344,12 @@ func TestSQS_changeVisibilityTimeout_success(t *testing.T) {
 	d := 17 * time.Second
 
 	m.On("ChangeMessageVisibilityWithContext",
-		anyCtx,
+		mocks.AnyContext,
 		&sqs.ChangeMessageVisibilityInput{
 			QueueUrl:          aws.String(q.queueURL),
 			ReceiptHandle:     msg.ReceiptHandle,
 			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
 		},
-		nilReqOpts,
 	).Return(
 		&sqs.ChangeMessageVisibilityOutput{},
 		error(nil),
@@ -393,13 +367,12 @@ func TestSQS_changeVisibilityTimeout_failure(t *testing.T) {
 
 	want := errors.New("test error")
 	m.On("ChangeMessageVisibilityWithContext",
-		anyCtx,
+		mocks.AnyContext,
 		&sqs.ChangeMessageVisibilityInput{
 			QueueUrl:          aws.String(q.queueURL),
 			ReceiptHandle:     msg.ReceiptHandle,
 			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
 		},
-		nilReqOpts,
 	).Return(
 		(*sqs.ChangeMessageVisibilityOutput)(nil),
 		want,
@@ -419,13 +392,12 @@ func TestSQS_changeVisibilityTimeout_ctxCancel(t *testing.T) {
 
 	finishIn := q.InitialVisibilityTimeout / 2
 	m.On("ChangeMessageVisibilityWithContext",
-		anyCtx,
+		mocks.AnyContext,
 		&sqs.ChangeMessageVisibilityInput{
 			QueueUrl:          aws.String(q.queueURL),
 			ReceiptHandle:     msg.ReceiptHandle,
 			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
 		},
-		nilReqOpts,
 	).After(finishIn).Return((*sqs.ChangeMessageVisibilityOutput)(nil), context.Canceled)
 
 	doCancel := time.AfterFunc(finishIn/2, cancel)
@@ -443,12 +415,11 @@ func TestSQS_delete_success(t *testing.T) {
 	msg := makeMsg()
 
 	m.On("DeleteMessageWithContext",
-		anyCtx,
+		mocks.AnyContext,
 		&sqs.DeleteMessageInput{
 			QueueUrl:      aws.String(q.queueURL),
 			ReceiptHandle: msg.ReceiptHandle,
 		},
-		nilReqOpts,
 	).Return(
 		&sqs.DeleteMessageOutput{},
 		error(nil),
@@ -465,12 +436,11 @@ func TestSQS_delete_failure(t *testing.T) {
 
 	want := errors.New("test error")
 	m.On("DeleteMessageWithContext",
-		anyCtx,
+		mocks.AnyContext,
 		&sqs.DeleteMessageInput{
 			QueueUrl:      aws.String(q.queueURL),
 			ReceiptHandle: msg.ReceiptHandle,
 		},
-		nilReqOpts,
 	).Return((*sqs.DeleteMessageOutput)(nil), want)
 	errc := q.delete(ctx, msg)
 	assert.Equal(t, want, <-errc)
@@ -486,12 +456,11 @@ func TestSQS_delete_ctxCancel(t *testing.T) {
 
 	finishIn := q.InitialVisibilityTimeout / 2
 	m.On("DeleteMessageWithContext",
-		anyCtx,
+		mocks.AnyContext,
 		&sqs.DeleteMessageInput{
 			QueueUrl:      aws.String(q.queueURL),
 			ReceiptHandle: msg.ReceiptHandle,
 		},
-		nilReqOpts,
 	).After(finishIn).Return((*sqs.DeleteMessageOutput)(nil), context.Canceled)
 
 	doCancel := time.AfterFunc(finishIn/2, cancel)
@@ -501,7 +470,3 @@ func TestSQS_delete_ctxCancel(t *testing.T) {
 	assert.Equal(t, context.Canceled, err)
 	m.AssertExpectations(t)
 }
-
-var anyCtx = mock.MatchedBy(func(ctx context.Context) bool {
-	return true
-})

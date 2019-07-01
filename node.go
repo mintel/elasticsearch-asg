@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	elastic "github.com/olivere/elastic/v7"
-	
+
 	"github.com/mintel/elasticsearch-asg/pkg/es"
 )
 
