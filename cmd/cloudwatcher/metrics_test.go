@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -15,49 +14,22 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 
 	esasg "github.com/mintel/elasticsearch-asg"
+	"github.com/mintel/elasticsearch-asg/mocks/mockhttp"
 	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
 
 const delta = 0.001
 
 func TestMakeCloudwatchData(t *testing.T) {
-	mux := &http.ServeMux{}
-	mux.HandleFunc("/_nodes/_all/_all", func(w http.ResponseWriter, r *http.Request) {
-		resp := helperLoadBytes(t, "nodes_info.json")
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write(resp)
-		assert.NoError(t, err)
-	})
-	mux.HandleFunc("/_nodes/stats", func(w http.ResponseWriter, r *http.Request) {
-		resp := helperLoadBytes(t, "nodes_stats.json")
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write(resp)
-		assert.NoError(t, err)
-	})
-	mux.HandleFunc("/_cluster/settings", func(w http.ResponseWriter, r *http.Request) {
-		resp := helperLoadBytes(t, "cluster_settings.json")
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write(resp)
-		assert.NoError(t, err)
-	})
-	mux.HandleFunc("/_cat/shards", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Header().Set("content-type", "application/json; charset=UTF-8")
-		_, err := w.Write([]byte(`[]`))
-		assert.NoError(t, err)
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Println("Bad path: " + r.URL.Path)
-	})
+	mux := &mockhttp.Mux{}
+	mux.On("GET", "/_nodes/_all/_all", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "nodes_info.json"))
+	mux.On("GET", "/_nodes/stats", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "nodes_stats.json"))
+	mux.On("GET", "/_cluster/settings", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "cluster_settings.json"))
+	mux.On("GET", "/_cat/shards", nil, nil).Return(http.StatusOK, nil, "[]")
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client, err := elastic.NewClient(
-		elastic.SetURL(server.URL),
-		elastic.SetSniff(false),
-		elastic.SetHealthcheck(false),
-	)
+	client, err := elastic.NewSimpleClient(elastic.SetURL(server.URL))
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -224,11 +196,15 @@ func TestMakeCloudwatchData(t *testing.T) {
 			assert.InDelta(t, v, metricValue, delta, "%s (%s) should = %v, but = %f", metricName, role, v, metricValue)
 		}
 	}
+
+	mux.AssertExpectations(t)
 }
 
 func helperLoadBytes(t *testing.T, name string) []byte {
 	path := filepath.Join("testdata", name) // relative path
 	bytes, err := ioutil.ReadFile(path)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to load test data file %s: %s", name, err)
+	}
 	return bytes
 }

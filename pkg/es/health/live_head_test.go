@@ -3,7 +3,6 @@ package health
 import (
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -11,48 +10,26 @@ import (
 func TestCheckLiveHEAD_passing(t *testing.T) {
 	check, _, mux, teardown := setup(t, CheckLiveHEAD)
 	defer teardown()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "HEAD" {
-			panic("got non-HEAD request")
-		}
-		if r.URL.Path != "/" {
-			panic("got non-root URL")
-		}
-		w.WriteHeader(http.StatusOK)
-	})
+	mux.On("HEAD", "/", nil, nil).Once().Return(http.StatusOK, nil, nil)
 	err := check()
 	assert.NoError(t, err)
+	mux.AssertExpectations(t)
 }
 
 func TestCheckLiveHEAD_timeout(t *testing.T) {
 	check, _, mux, teardown := setup(t, CheckLiveHEAD)
 	defer teardown()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "HEAD" {
-			panic("got non-HEAD request")
-		}
-		if r.URL.Path != "/" {
-			panic("got non-root URL")
-		}
-		time.Sleep(DefaultHTTPTimeout * 2)
-		w.WriteHeader(http.StatusOK)
-	})
+	mux.On("HEAD", "/", nil, nil).Once().After(DefaultHTTPTimeout*2).Return(http.StatusOK, nil, nil)
 	err := check()
 	assert.Error(t, err)
+	mux.AssertExpectations(t)
 }
 
 func TestCheckLiveHEAD_error(t *testing.T) {
 	check, _, mux, teardown := setup(t, CheckLiveHEAD)
 	defer teardown()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "HEAD" {
-			panic("got non-HEAD request")
-		}
-		if r.URL.Path != "/" {
-			panic("got non-root URL")
-		}
-		w.WriteHeader(http.StatusInternalServerError)
-	})
+	mux.On("HEAD", "/", nil, nil).Once().Return(http.StatusInternalServerError, nil, http.StatusText(http.StatusInternalServerError))
 	err := check()
 	assert.Error(t, err)
+	mux.AssertExpectations(t)
 }
