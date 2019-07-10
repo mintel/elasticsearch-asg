@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Region parses an SQS queue URL to return the AWS region its in.
+// Region parses an SQS queue URL to return the AWS region it's in.
 func Region(URL string) (string, error) {
 	u, err := url.Parse(URL)
 	if err != nil {
