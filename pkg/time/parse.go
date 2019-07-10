@@ -2,6 +2,7 @@ package time
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,11 +25,6 @@ const (
 	Year = (time.Duration(365.2425*float64(Day)) / time.Second) * time.Second // truncate to second
 )
 
-const (
-	minDuration time.Duration = -1 << 63
-	maxDuration time.Duration = 1<<63 - 1
-)
-
 const iso8601Group = `(?:(?P<%s>-?\d+(?:[,.]\d+)?)%s)?`
 
 var iso8601Duation = regexp.MustCompile(fmt.Sprintf(`^P(?:0|%s|%s)$`,
@@ -49,6 +45,7 @@ var iso8601Duation = regexp.MustCompile(fmt.Sprintf(`^P(?:0|%s|%s)$`,
 //
 // The following time assumptions are used:
 // - Days are 24 hours.
+// - Weeks are 7 days.
 // - Months are 30.436875 days.
 // - Years are 365.2425 days.
 //
@@ -112,23 +109,15 @@ func MustParseISO8601D(duration string) time.Duration {
 	return d
 }
 
-// addDurationMul performs d+n*u, and panics if the result overflows int64.
+// addDurationMul returns d+n*u. It also returns a bool indicating if the result is valid (true)
+// or it hit an int64 overflow (false).
 func addDurationMul(d time.Duration, n float64, u time.Duration) (time.Duration, bool) {
 	r := n * float64(u)
-	if r > float64(maxDuration) {
-		panic("addition overflow")
-	} else if r < float64(minDuration) {
-		panic("subtraction overflow")
-	} else if r < 0 {
-		i, ok := overflow.Add64(int64(d), int64(r))
-		if ok {
-			return time.Duration(i), ok
-		}
-		return minDuration, ok
+	if r > float64(math.MaxInt64) {
+		return time.Duration(math.MaxInt64), false
+	} else if r < float64(math.MinInt64) {
+		return time.Duration(math.MinInt64), false
 	}
 	i, ok := overflow.Add64(int64(d), int64(r))
-	if ok {
-		return time.Duration(i), ok
-	}
-	return maxDuration, ok
+	return time.Duration(i), ok
 }
