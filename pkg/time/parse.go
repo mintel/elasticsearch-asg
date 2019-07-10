@@ -109,8 +109,7 @@ func MustParseISO8601D(duration string) time.Duration {
 	return d
 }
 
-// addDurationMul returns d+n*u. It also returns a bool indicating if the result is valid (true)
-// or it hit an int64 overflow (false).
+// addDurationMul returns d + (n * u), and a bool indicating there was no int64 overflow/underflow.
 func addDurationMul(d time.Duration, n float64, u time.Duration) (time.Duration, bool) {
 	r := n * float64(u)
 	if r > float64(math.MaxInt64) {
