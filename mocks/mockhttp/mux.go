@@ -1,5 +1,29 @@
 // Package mockhttp extends https://godoc.org/github.com/stretchr/testify/mock
 // for mocking http servers.
+//
+//   func TestMockRESTAPI(t *testing.T) {
+//   	mux := &mockhttp.Mux{} // Used to mock HTTP endpoints
+//   	server := httptest.NewServer(mux)
+//   	defer server.Close()
+//
+//   	client := myapi.Client(server.URL)
+//   	p := &myapi.Person{
+//   		ID:   1,
+//   		Name: "Testy McTestface",
+//   	}
+//
+//   	mux.On("POST", "/foobar", nil, p).Once().Return(http.StatusCreated, nil, nil)
+//   	err := client.PostThing(1, "Testy McTestface")
+//   	assert.NoError(t, err)
+//
+//   	mux.On("GET", "/foobar", nil, nil).Once().Return(http.StatusOK, nil, p)
+//   	result, err := client.GetThing()
+//   	assert.NoError(t, err)
+//   	assert.Equal(t, p, result)
+//
+//   	mux.AssertExpectations(t) // Assert all expected endpoint calls were made
+//   }
+//
 package mockhttp
 
 import (
