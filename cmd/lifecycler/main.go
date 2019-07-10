@@ -81,7 +81,7 @@ func main() {
 	esCommand := esasg.NewElasticsearchCommandService(esClient)
 
 	queue := squeues.New(sqsClient, *queueURL)
-	err = queue.Run(ctx, func(ctx context.Context, m *sqs.Message) error {
+	err = queue.Run(ctx, squeues.FuncHandler(func(ctx context.Context, m *sqs.Message) error {
 		event, err := lifecycle.NewEventFromMsg(ctx, asClient, []byte(*m.Body))
 		if err == lifecycle.ErrTestEvent {
 			return nil
@@ -192,7 +192,7 @@ func main() {
 			}
 		}
 		return err
-	})
+	}))
 	if err != nil {
 		logger.Fatal("error handling SQS lifecycle messages", zap.Error(err))
 	}

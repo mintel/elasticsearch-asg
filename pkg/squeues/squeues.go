@@ -38,6 +38,29 @@ var (
 	sendVisRandomizationFactor = 0.05
 )
 
+// Handler is an interface for handling SQS messages.
+// It's passed into SQS.Run().
+type Handler interface {
+	Handle(context.Context, *sqs.Message) error
+}
+
+//go:generate mockery -name=Handler
+
+type funcHandler struct {
+	Fn func(context.Context, *sqs.Message) error
+}
+
+func (h *funcHandler) Handle(ctx context.Context, m *sqs.Message) error {
+	return h.Fn(ctx, m)
+}
+
+// FuncHandler returns a simple Handler wrapper around a function.
+func FuncHandler(fn func(context.Context, *sqs.Message) error) Handler {
+	return &funcHandler{
+		Fn: fn,
+	}
+}
+
 // SQS is a dispatcher for AWS SQS messages, calling a handler function in a
 // goroutine and keeping the message reserved until its finished.
 type SQS struct {
@@ -75,7 +98,7 @@ func New(client sqsiface.SQSAPI, queueURL string) *SQS {
 // to keep the message reserved. If handleF or any communication with AWS returns a error,
 // the context will be canceled and the error returned. If handleF returns without error,
 // the message will be deleted from SQS.
-func (q *SQS) Run(ctx context.Context, handleF func(context.Context, *sqs.Message) error) error {
+func (q *SQS) Run(ctx context.Context, h Handler) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -127,7 +150,7 @@ func (q *SQS) Run(ctx context.Context, handleF func(context.Context, *sqs.Messag
 		case messages := <-receiveResults: // End SQS message receive and start handler goroutines.
 			for _, m := range messages {
 				pendingHandle[*m.ReceiptHandle] = struct{}{}
-				go forwardErr(ctx, q.handle(ctx, handleF, m, handleResults, postponec), errc)
+				go forwardErr(ctx, q.handle(ctx, h, m, handleResults, postponec), errc)
 			}
 			if q.MaxConcurrent == 0 || len(pendingHandle) < q.MaxConcurrent {
 				startReceive = receiveTicker.C // Enable start receive case
@@ -191,14 +214,14 @@ func (q *SQS) receive(ctx context.Context, n int, results chan<- []*sqs.Message)
 // handle calls handleF on the given m as a goroutine, and sends either the resulting error to errc or m to done.
 // If handleF takes time, messages will be sent to the postpone chan indicating that the SQS message visibility
 // timeout should be updated.
-func (q *SQS) handle(ctx context.Context, handleF func(context.Context, *sqs.Message) error, m *sqs.Message, done chan<- *sqs.Message, postpone chan<- postponeNotification) <-chan error {
+func (q *SQS) handle(ctx context.Context, h Handler, m *sqs.Message, done chan<- *sqs.Message, postpone chan<- postponeNotification) <-chan error {
 	errc := make(chan error, 1)
 	go func() {
 		defer close(errc)
 
 		result := make(chan error, 1)
 		go func() {
-			result <- handleF(ctx, m)
+			result <- h.Handle(ctx, m)
 		}()
 
 		// Increase message visibility timeout in exponentially increasing amounts.
