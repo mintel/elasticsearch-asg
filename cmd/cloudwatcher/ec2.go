@@ -23,18 +23,20 @@ func GetInstanceVCPUCount(ec2Svc ec2iface.EC2API, IDs []string) (map[string]int,
 			toDesc = append(toDesc, aws.String(id))
 		}
 	}
-	resp, err := ec2Svc.DescribeInstances(&ec2.DescribeInstancesInput{
-		InstanceIds: toDesc,
-	})
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range resp.Reservations {
-		for _, i := range r.Instances {
-			instanceID := *i.InstanceId
-			vcpuCount := int(*i.CpuOptions.CoreCount * *i.CpuOptions.ThreadsPerCore)
-			out[instanceID] = vcpuCount
-			vcpuCache.SetDefault(instanceID, vcpuCount)
+	if len(toDesc) > 0 {
+		resp, err := ec2Svc.DescribeInstances(&ec2.DescribeInstancesInput{
+			InstanceIds: toDesc,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range resp.Reservations {
+			for _, i := range r.Instances {
+				instanceID := *i.InstanceId
+				vcpuCount := int(*i.CpuOptions.CoreCount * *i.CpuOptions.ThreadsPerCore)
+				out[instanceID] = vcpuCount
+				vcpuCache.SetDefault(instanceID, vcpuCount)
+			}
 		}
 	}
 	return out, nil
