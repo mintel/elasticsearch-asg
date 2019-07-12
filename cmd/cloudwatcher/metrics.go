@@ -272,7 +272,7 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 			Dimensions:        dimensions,
 			Unit:              aws.String(cloudwatch.StandardUnitPercent),
 			StorageResolution: aws.Int64(1),
-			Value:             aws.Float64(load1m / vcpuCount),
+			Value:             aws.Float64(load1m / vcpuCount * 100), // CloudWatch percents are int 0-100
 		},
 		&cloudwatch.MetricDatum{
 			Timestamp:         aws.Time(timestamp),
@@ -280,7 +280,7 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 			Dimensions:        dimensions,
 			Unit:              aws.String(cloudwatch.StandardUnitPercent),
 			StorageResolution: aws.Int64(1),
-			Value:             aws.Float64(load5m / vcpuCount),
+			Value:             aws.Float64(load5m / vcpuCount * 100), // CloudWatch percents are int 0-100
 		},
 		&cloudwatch.MetricDatum{
 			Timestamp:         aws.Time(timestamp),
@@ -288,7 +288,7 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 			Dimensions:        dimensions,
 			Unit:              aws.String(cloudwatch.StandardUnitPercent),
 			StorageResolution: aws.Int64(1),
-			Value:             aws.Float64(load15m / vcpuCount),
+			Value:             aws.Float64(load15m / vcpuCount * 100), // CloudWatch percents are int 0-100
 		},
 		&cloudwatch.MetricDatum{
 			Timestamp:         aws.Time(timestamp),
