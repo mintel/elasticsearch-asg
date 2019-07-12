@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
+	"github.com/aws/aws-sdk-go/service/ec2"
 
 	esasg "github.com/mintel/elasticsearch-asg"
 )
@@ -48,13 +49,14 @@ func main() {
 	defer cancel()
 
 	sess := session.Must(session.NewSession())
-	cloudwatchConfig := aws.NewConfig().WithMaxRetries(awsMaxRetries)
+	awsConfig := aws.NewConfig().WithMaxRetries(awsMaxRetries)
 	if region != nil && *region != "" {
-		cloudwatchConfig = cloudwatchConfig.WithRegion(*region)
+		awsConfig = awsConfig.WithRegion(*region)
 	} else if region, _ := ec2metadata.New(sess).Region(); region != "" {
-		cloudwatchConfig = cloudwatchConfig.WithRegion(region)
+		awsConfig = awsConfig.WithRegion(region)
 	}
-	cwClient := cloudwatch.New(sess, cloudwatchConfig)
+	cwSvc := cloudwatch.New(sess, awsConfig)
+	ec2Svc := ec2.New(sess, awsConfig)
 
 	esClient, err := elastic.DialContext(
 		ctx,
@@ -74,7 +76,16 @@ func main() {
 				logger.Fatal("error getting Elasticsearch nodes info", zap.Error(err))
 			}
 
-			metricData := MakeCloudwatchData(nodes)
+			instanceIDs := make([]string, 0, len(nodes))
+			for id := range nodes {
+				instanceIDs = append(instanceIDs, id)
+			}
+			vcpuCounts, err := GetInstanceVCPUCount(ec2Svc, instanceIDs)
+			if err != nil {
+				logger.Fatal("error getting EC2 instances vCPU counts", zap.Error(err))
+			}
+
+			metricData := MakeCloudwatchData(nodes, vcpuCounts)
 			for _, datum := range metricData {
 				LogDatum(logger, datum)
 			}
@@ -88,7 +99,7 @@ func main() {
 					j = len(metricData)
 				}
 				batch := metricData[i:j]
-				_, err := cwClient.PutMetricDataWithContext(ctx, &cloudwatch.PutMetricDataInput{
+				_, err := cwSvc.PutMetricDataWithContext(ctx, &cloudwatch.PutMetricDataInput{
 					Namespace:  namespace,
 					MetricData: batch,
 				})

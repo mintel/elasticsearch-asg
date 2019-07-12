@@ -21,7 +21,7 @@ import (
 // - JVM garbage collection stats
 //
 // The metrics are both in total, and broken out by node role.
-func MakeCloudwatchData(nodes map[string]*esasg.Node) []*cloudwatch.MetricDatum {
+func MakeCloudwatchData(nodes map[string]*esasg.Node, vcpuCounts map[string]int) []*cloudwatch.MetricDatum {
 	timestamp := time.Now()
 
 	roles := []string{"all", "coordinate"}
@@ -36,15 +36,19 @@ func MakeCloudwatchData(nodes map[string]*esasg.Node) []*cloudwatch.MetricDatum 
 		collectors[role] = newStatsCollector()
 	}
 
-	for _, node := range nodes {
+	for instanceID, node := range nodes {
+		vcpuCount, ok := vcpuCounts[instanceID]
+		if !ok {
+			panic("got ndoes and vcpuCounts with different entries")
+		}
 		if len(node.Roles) > 0 {
 			for _, role := range node.Roles {
-				collectors[role].Add(node)
+				collectors[role].Add(node, vcpuCount)
 			}
 		} else {
-			collectors["coordinate"].Add(node)
+			collectors["coordinate"].Add(node, vcpuCount)
 		}
-		collectors["all"].Add(node)
+		collectors["all"].Add(node, vcpuCount)
 	}
 
 	metrics := make([]*cloudwatch.MetricDatum, 0)
@@ -76,6 +80,12 @@ type statsCollector struct {
 	// JVM heap used
 	usedHeapBytes []float64
 
+	// CPU load
+	vcpuCounts []float64
+	load1m     []float64
+	load5m     []float64
+	load15m    []float64
+
 	jvmPools map[string]*struct {
 		Used     []float64
 		Max      []float64
@@ -103,6 +113,10 @@ func newStatsCollector() *statsCollector {
 	return &statsCollector{
 		maxHeapBytes:  make([]float64, 0),
 		usedHeapBytes: make([]float64, 0),
+		vcpuCounts:    make([]float64, 0),
+		load1m:        make([]float64, 0),
+		load5m:        make([]float64, 0),
+		load15m:       make([]float64, 0),
 		jvmPools: make(map[string]*struct {
 			Used     []float64
 			Max      []float64
@@ -120,8 +134,28 @@ func newStatsCollector() *statsCollector {
 }
 
 // Add appends stats about an Elasticsearch node.
-func (s *statsCollector) Add(node *esasg.Node) {
+func (s *statsCollector) Add(node *esasg.Node, vcpuCount int) {
 	s.count++
+
+	s.vcpuCounts = append(s.vcpuCounts, float64(vcpuCount))
+
+	load, ok := node.Stats.OS.CPU.LoadAverage["1m"]
+	if !ok {
+		panic("missing 1m load average")
+	}
+	s.load1m = append(s.load1m, load)
+
+	load, ok = node.Stats.OS.CPU.LoadAverage["5m"]
+	if !ok {
+		panic("missing 5m load average")
+	}
+	s.load5m = append(s.load5m, load)
+
+	load, ok = node.Stats.OS.CPU.LoadAverage["15m"]
+	if !ok {
+		panic("missing 15m load average")
+	}
+	s.load15m = append(s.load15m, load)
 
 	s.maxHeapBytes = append(s.maxHeapBytes, float64(node.Stats.JVM.Mem.HeapMaxInBytes))
 	s.usedHeapBytes = append(s.usedHeapBytes, float64(node.Stats.JVM.Mem.HeapUsedInBytes))
@@ -182,6 +216,11 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 		return metrics
 	}
 
+	vcpuCount := sum(s.vcpuCounts...)
+	load1m := sum(s.load1m...)
+	load5m := sum(s.load5m...)
+	load15m := sum(s.load15m...)
+
 	maxHeapBytes := sum(s.maxHeapBytes...)
 	usedHeapBytes := sum(s.usedHeapBytes...)
 	countExcludedFromAllocation := countTrue(s.excludedFromAllocation...)
@@ -194,6 +233,62 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 			Unit:              aws.String(cloudwatch.StandardUnitCount),
 			StorageResolution: aws.Int64(1),
 			Value:             aws.Float64(float64(s.count)),
+		},
+		&cloudwatch.MetricDatum{
+			Timestamp:         aws.Time(timestamp),
+			MetricName:        aws.String("CountvCPU"),
+			Dimensions:        dimensions,
+			Unit:              aws.String(cloudwatch.StandardUnitCount),
+			StorageResolution: aws.Int64(1),
+			Value:             aws.Float64(vcpuCount),
+		},
+		&cloudwatch.MetricDatum{
+			Timestamp:         aws.Time(timestamp),
+			MetricName:        aws.String("Load1m"),
+			Dimensions:        dimensions,
+			Unit:              aws.String(cloudwatch.StandardUnitNone),
+			StorageResolution: aws.Int64(1),
+			Value:             aws.Float64(load1m),
+		},
+		&cloudwatch.MetricDatum{
+			Timestamp:         aws.Time(timestamp),
+			MetricName:        aws.String("Load5m"),
+			Dimensions:        dimensions,
+			Unit:              aws.String(cloudwatch.StandardUnitNone),
+			StorageResolution: aws.Int64(1),
+			Value:             aws.Float64(load5m),
+		},
+		&cloudwatch.MetricDatum{
+			Timestamp:         aws.Time(timestamp),
+			MetricName:        aws.String("Load15m"),
+			Dimensions:        dimensions,
+			Unit:              aws.String(cloudwatch.StandardUnitNone),
+			StorageResolution: aws.Int64(1),
+			Value:             aws.Float64(load15m),
+		},
+		&cloudwatch.MetricDatum{
+			Timestamp:         aws.Time(timestamp),
+			MetricName:        aws.String("Load1mUtilization"),
+			Dimensions:        dimensions,
+			Unit:              aws.String(cloudwatch.StandardUnitPercent),
+			StorageResolution: aws.Int64(1),
+			Value:             aws.Float64(load1m / vcpuCount),
+		},
+		&cloudwatch.MetricDatum{
+			Timestamp:         aws.Time(timestamp),
+			MetricName:        aws.String("Load5mUtilization"),
+			Dimensions:        dimensions,
+			Unit:              aws.String(cloudwatch.StandardUnitPercent),
+			StorageResolution: aws.Int64(1),
+			Value:             aws.Float64(load5m / vcpuCount),
+		},
+		&cloudwatch.MetricDatum{
+			Timestamp:         aws.Time(timestamp),
+			MetricName:        aws.String("Load15mUtilization"),
+			Dimensions:        dimensions,
+			Unit:              aws.String(cloudwatch.StandardUnitPercent),
+			StorageResolution: aws.Int64(1),
+			Value:             aws.Float64(load15m / vcpuCount),
 		},
 		&cloudwatch.MetricDatum{
 			Timestamp:         aws.Time(timestamp),

@@ -11,9 +11,12 @@ import (
 	elastic "github.com/olivere/elastic/v7"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
+	"github.com/aws/aws-sdk-go/service/ec2"
 
 	esasg "github.com/mintel/elasticsearch-asg"
+	"github.com/mintel/elasticsearch-asg/mocks"
 	"github.com/mintel/elasticsearch-asg/mocks/mockhttp"
 	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
@@ -29,18 +32,59 @@ func TestMakeCloudwatchData(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client, err := elastic.NewSimpleClient(elastic.SetURL(server.URL))
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(server.URL))
 	if !assert.NoError(t, err) {
 		return
 	}
 
-	esQuery := esasg.NewElasticsearchQueryService(client)
+	esQuery := esasg.NewElasticsearchQueryService(esClient)
 	nodes, err := esQuery.Nodes(context.TODO())
 	if !assert.NoError(t, err) {
 		return
 	}
 
-	metrics := MakeCloudwatchData(nodes)
+	cpuOpts := &ec2.CpuOptions{
+		CoreCount:      aws.Int64(1),
+		ThreadsPerCore: aws.Int64(2),
+	}
+	instanceIDs := []string{
+		"i-001b1abab63133912",
+		"i-0adf68017a253c05d",
+		"i-0f5c6d4d61d41b9fc",
+		"i-0d681a8eb9510112d",
+		"i-0f0ea93320f56e140",
+		"i-0aab86111990f2d0c",
+		"i-0ea13932cc8493d2b",
+		"i-0498ae3c83d833659",
+		"i-05d5063ba7e93296c",
+	}
+	instanceIDPtrs := make([]*string, len(instanceIDs))
+	instances := make([]*ec2.Instance, 0)
+	for i, id := range instanceIDs {
+		instances = append(instances, &ec2.Instance{
+			InstanceId: aws.String(id),
+			CpuOptions: cpuOpts,
+		})
+		instanceIDPtrs[i] = aws.String(id)
+	}
+
+	ec2Svc := &mocks.EC2API{}
+	ec2Svc.On("DescribeInstances", &ec2.DescribeInstancesInput{
+		InstanceIds: instanceIDPtrs,
+	}).Once().Return(&ec2.DescribeInstancesOutput{
+		Reservations: []*ec2.Reservation{
+			&ec2.Reservation{
+				Instances: instances,
+			},
+		},
+	}, error(nil))
+
+	vcpuCounts, err := GetInstanceVCPUCount(ec2Svc, instanceIDs)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	metrics := MakeCloudwatchData(nodes, vcpuCounts)
 
 	expected := map[string]map[string]float64{
 		"all": {
@@ -70,6 +114,13 @@ func TestMakeCloudwatchData(t *testing.T) {
 			"JVMYoungPoolPeakUsed":        628162560,
 			"JVMYoungPoolUsed":            250537016,
 			"JVMYoungPoolUtilization":     0.460819,
+			"CountvCPU":                   18,
+			"Load1m":                      0.75,
+			"Load5m":                      1.3,
+			"Load15m":                     1.12,
+			"Load1mUtilization":           0.041667,
+			"Load5mUtilization":           0.072222,
+			"Load15mUtilization":          0.062222,
 		},
 		"master": {
 			"CountExcludedFromAllocation": 0,
@@ -95,6 +146,13 @@ func TestMakeCloudwatchData(t *testing.T) {
 			"JVMYoungPoolPeakUsed":        209387520,
 			"JVMYoungPoolUsed":            100098632,
 			"JVMYoungPoolUtilization":     0.409020,
+			"CountvCPU":                   6,
+			"Load1m":                      0.36,
+			"Load5m":                      0.57,
+			"Load15m":                     0.46,
+			"Load1mUtilization":           0.06,
+			"Load5mUtilization":           0.095,
+			"Load15mUtilization":          0.076667,
 		},
 		"data": {
 			"CountExcludedFromAllocation": 1,
@@ -123,6 +181,13 @@ func TestMakeCloudwatchData(t *testing.T) {
 			"JVMYoungPoolPeakUsed":        209387520,
 			"JVMYoungPoolUsed":            31661120,
 			"JVMYoungPoolUtilization":     0.131847,
+			"CountvCPU":                   6,
+			"Load1m":                      0.31,
+			"Load5m":                      0.49,
+			"Load15m":                     0.41,
+			"Load1mUtilization":           0.051667,
+			"Load5mUtilization":           0.081667,
+			"Load15mUtilization":          0.068333,
 		},
 		"ingest": {
 			"CountExcludedFromAllocation": 0,
@@ -148,31 +213,13 @@ func TestMakeCloudwatchData(t *testing.T) {
 			"JVMYoungPoolPeakUsed":        209387520,
 			"JVMYoungPoolUsed":            118777264,
 			"JVMYoungPoolUtilization":     2.019497,
-		},
-		"coordinate": {
-			"CountExcludedFromAllocation": 0,
-			"CountNodes":                  3,
-			"GCOldCount":                  9,
-			"GCOldTime":                   0.25,
-			"GCYoungCount":                4502,
-			"GCYoungTime":                 56.092000,
-			"JVMOldPoolMax":               5645991936,
-			"JVMOldPoolPeakMax":           5645991936,
-			"JVMOldPoolPeakUsed":          342150576,
-			"JVMOldPoolUsed":              342150576,
-			"JVMOldPoolUtilization":       5.817375,
-			"JVMSurvivorPoolMax":          26148864,
-			"JVMSurvivorPoolPeakMax":      26148864,
-			"JVMSurvivorPoolPeakUsed":     26148864,
-			"JVMSurvivorPoolUsed":         134856,
-			"JVMSurvivorPoolUtilization":  0.002293,
-			"JVMTotal":                    5881528320,
-			"JVMUsed":                     460994240,
-			"JVMYoungPoolMax":             209387520,
-			"JVMYoungPoolPeakMax":         209387520,
-			"JVMYoungPoolPeakUsed":        209387520,
-			"JVMYoungPoolUsed":            118777264,
-			"JVMYoungPoolUtilization":     2.019497,
+			"CountvCPU":                   6,
+			"Load1m":                      0.08,
+			"Load5m":                      0.24,
+			"Load15m":                     0.25,
+			"Load1mUtilization":           0.013333,
+			"Load5mUtilization":           0.04,
+			"Load15mUtilization":          0.041667,
 		},
 	}
 
