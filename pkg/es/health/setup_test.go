@@ -24,8 +24,7 @@ func setup(t *testing.T, checkFactory func(context.Context, string) healthcheck.
 	t2 := zap.RedirectStdLog(logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	mux := &mockhttp.Mux{}
-	server := httptest.NewServer(mux)
+	server, mux := mockhttp.NewServer()
 	check := checkFactory(ctx, server.URL)
 
 	originalTimeout := DefaultHTTPTimeout

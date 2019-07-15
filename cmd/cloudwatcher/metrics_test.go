@@ -4,7 +4,6 @@ import (
 	"context"
 	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -24,13 +23,12 @@ import (
 const delta = 0.001
 
 func TestMakeCloudwatchData(t *testing.T) {
-	mux := &mockhttp.Mux{}
+	server, mux := mockhttp.NewServer()
+	defer server.Close()
 	mux.On("GET", "/_nodes/_all/_all", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "nodes_info.json"))
 	mux.On("GET", "/_nodes/stats", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "nodes_stats.json"))
 	mux.On("GET", "/_cluster/settings", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "cluster_settings.json"))
 	mux.On("GET", "/_cat/shards", nil, nil).Return(http.StatusOK, nil, "[]")
-	server := httptest.NewServer(mux)
-	defer server.Close()
 
 	esClient, err := elastic.NewSimpleClient(elastic.SetURL(server.URL))
 	if !assert.NoError(t, err) {

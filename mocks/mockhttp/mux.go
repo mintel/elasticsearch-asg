@@ -2,8 +2,7 @@
 // for mocking http servers.
 //
 //   func TestMockRESTAPI(t *testing.T) {
-//   	mux := &mockhttp.Mux{} // Used to mock HTTP endpoints
-//   	server := httptest.NewServer(mux)
+//   	server, mux := mockhttp.NewServer()
 //   	defer server.Close()
 //
 //   	client := myapi.Client(server.URL)
