@@ -192,25 +192,49 @@ func (s *elasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 		n.Stats = *ns
 	}
 	for _, sr := range shardsResp {
-		node := sr.Node
-		if node == "" {
+		shardNodes, err := parseShardNodes(sr.Node)
+		if err != nil {
+			zap.L().Error(err.Error(), zap.String("name", sr.Node))
+			return nil, err
+		} else if len(shardNodes) == 0 {
 			// Unassigned shard. Ignore.
 			continue
 		}
-		if n, ok := nodes[node]; ok {
-			n.Shards = append(n.Shards, sr)
-		} else if len(names) == 0 {
-			nodeNames := make([]string, 0, len(nodes))
-			for name := range nodes {
-				nodeNames = append(nodeNames, name)
+		for _, node := range shardNodes {
+			if n, ok := nodes[node]; ok {
+				n.Shards = append(n.Shards, sr)
+			} else if len(names) == 0 {
+				nodeNames := make([]string, 0, len(nodes))
+				for name := range nodes {
+					nodeNames = append(nodeNames, name)
+				}
+				zap.L().Error("got node in shards response that isn't in info or stats response",
+					zap.String("name", node),
+					zap.Strings("nodes", nodeNames),
+				)
+				return nil, ErrInconsistentNodes
 			}
-			zap.L().Error("got node in shards response that isn't in info or stats response",
-				zap.String("name", node),
-				zap.Strings("nodes", nodeNames),
-			)
-			return nil, ErrInconsistentNodes
 		}
 	}
 
 	return nodes, nil
+}
+
+// parseShardNodes parses the node string response from the /_cat/shards endpoint.
+// This could be one of:
+// - An empty string for an unassigned shard.
+// - A node name for an normal shard.
+// - Multiple node names if the shard is being relocated.
+func parseShardNodes(node string) ([]string, error) {
+	if node == "" {
+		return nil, nil
+	}
+	parts := strings.Fields(node)
+	switch len(parts) {
+	case 1:
+		return parts, nil
+	case 5: // Example: "i-0968d7621b79cd73d -> 10.2.4.58 kNe49LLvSqGXBn2s8Ffgyw i-0a2ed08df0e5cfff6"
+		return []string{parts[0], parts[4]}, nil
+	}
+	return nil, errors.New("couldn't parse /_cat/shards response node name")
 }

@@ -66,3 +66,44 @@ func TestElasticsearchQueryService_Node(t *testing.T) {
 		assert.Equal(t, expected.Name, n.Name)
 	}
 }
+
+func TestParseShardNodes(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		input string
+		want  []string
+		err   bool
+	}{
+		{
+			desc:  "unassigned-shard",
+			input: "",
+			want:  nil,
+		},
+		{
+			desc:  "shard",
+			input: "i-0968d7621b79cd73d",
+			want:  []string{"i-0968d7621b79cd73d"},
+		},
+		{
+			desc:  "relocating-shard",
+			input: "i-0968d7621b79cd73d -> 10.2.4.58 kNe49LLvSqGXBn2s8Ffgyw i-0a2ed08df0e5cfff6",
+			want:  []string{"i-0968d7621b79cd73d", "i-0a2ed08df0e5cfff6"},
+		},
+		{
+			desc:  "error",
+			input: "not a node",
+			err:   true,
+		},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			got, err := parseShardNodes(tC.input)
+			assert.Equal(t, got, tC.want)
+			if tC.err {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
