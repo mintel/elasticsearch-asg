@@ -27,22 +27,10 @@ services:
       interval: 1m30s
       timeout: 10s
       retries: 3
-  localstack:
-    image: localstack/localstack:latest
-    ports:
-      - "4576:4576"
-    environment:
-      - SERVICES=sqs
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4576"]
-      interval: 1m30s
-      timeout: 10s
-      retries: 3
   wait:
     image: waisbrot/wait
     links:
       - elasticsearch
-      - localstack
     environment:
-      - TARGETS=elasticsearch:9200,localstack:4576
+      - TARGETS=elasticsearch:9200
       - TIMEOUT=60
