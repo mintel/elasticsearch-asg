@@ -192,7 +192,12 @@ func (s *elasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 		n.Stats = *ns
 	}
 	for _, sr := range shardsResp {
-		if n, ok := nodes[sr.Node]; ok {
+		node := sr.Node
+		if node == "" {
+			// Unassigned shard. Ignore.
+			continue
+		}
+		if n, ok := nodes[node]; ok {
 			n.Shards = append(n.Shards, sr)
 		} else if len(names) == 0 {
 			nodeNames := make([]string, 0, len(nodes))
@@ -200,7 +205,7 @@ func (s *elasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 				nodeNames = append(nodeNames, name)
 			}
 			zap.L().Error("got node in shards response that isn't in info or stats response",
-				zap.String("name", sr.Node),
+				zap.String("name", node),
 				zap.Strings("nodes", nodeNames),
 			)
 			return nil, ErrInconsistentNodes
