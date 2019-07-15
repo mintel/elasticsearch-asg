@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/heptiolabs/healthcheck"
 	"go.uber.org/zap"
@@ -26,7 +27,12 @@ func setup(t *testing.T, checkFactory func(context.Context, string) healthcheck.
 	mux := &mockhttp.Mux{}
 	server := httptest.NewServer(mux)
 	check := checkFactory(ctx, server.URL)
+
+	originalTimeout := DefaultHTTPTimeout
+	DefaultHTTPTimeout = 500 * time.Millisecond
+
 	return check, server, mux, func() {
+		DefaultHTTPTimeout = originalTimeout
 		cancel()
 		server.Close()
 		t2()

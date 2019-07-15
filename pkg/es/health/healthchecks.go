@@ -12,7 +12,7 @@ import (
 
 // DefaultHTTPTimeout is the default timeout for sending HTTP requests
 // to Elasticsearch.
-var DefaultHTTPTimeout = 500 * time.Millisecond
+var DefaultHTTPTimeout = 30 * time.Second
 
 // lazyClient instantiates an Elasticsearch client.
 // The elastic.New[Simple]Client() func returns an error if it
