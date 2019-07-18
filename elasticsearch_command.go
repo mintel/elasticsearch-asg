@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
 
 const shardAllocExcludeSetting = "cluster.routing.allocation.exclude"
@@ -71,7 +72,10 @@ func (s *elasticsearchCommandService) Drain(ctx context.Context, nodeName string
 		return err
 	}
 
-	settings := newshardAllocationExcludeSettings(resp.Transient)
+	settings := newShardAllocationExcludeSettings(resp.Transient)
+	if str.In(nodeName, settings.Name...) {
+		return nil
+	}
 	settings.Name = append(settings.Name, nodeName)
 	sort.Strings(settings.Name)
 	// ignore everything but name
@@ -79,7 +83,9 @@ func (s *elasticsearchCommandService) Drain(ctx context.Context, nodeName string
 	settings.Host = nil
 	settings.Attr = nil
 
-	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(map[string]interface{}{"transient": settings.Map()}).Do(ctx)
+	settingsMap := settings.Map()
+	body := map[string]interface{}{"transient": settingsMap}
+	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(body).Do(ctx)
 	return err
 }
 
@@ -95,7 +101,7 @@ func (s *elasticsearchCommandService) Undrain(ctx context.Context, nodeName stri
 		return err
 	}
 
-	settings := newshardAllocationExcludeSettings(resp.Transient)
+	settings := newShardAllocationExcludeSettings(resp.Transient)
 	found := false
 	filtered := settings.Name[:0]
 	for _, name := range settings.Name {
@@ -144,8 +150,8 @@ type shardAllocationExcludeSettings struct {
 	Attr           map[string][]string
 }
 
-// newshardAllocationExcludeSettings creates a new shardAllocationExcludeSettings.
-func newshardAllocationExcludeSettings(settings *gjson.Result) *shardAllocationExcludeSettings {
+// newShardAllocationExcludeSettings creates a new shardAllocationExcludeSettings.
+func newShardAllocationExcludeSettings(settings *gjson.Result) *shardAllocationExcludeSettings {
 	s := &shardAllocationExcludeSettings{
 		Attr: make(map[string][]string),
 	}
@@ -167,35 +173,39 @@ func newshardAllocationExcludeSettings(settings *gjson.Result) *shardAllocationE
 	return s
 }
 
-func (s *shardAllocationExcludeSettings) Map() map[string]interface{} {
-	m := make(map[string]interface{})
+func (s *shardAllocationExcludeSettings) Map() map[string]*string {
+	m := make(map[string]*string)
 	if s.Name != nil {
 		if len(s.Name) == 0 {
 			m[shardAllocExcludeSetting+"._name"] = nil
 		} else {
-			m[shardAllocExcludeSetting+"._name"] = strings.Join(s.Name, ",")
+			m[shardAllocExcludeSetting+"._name"] = strPtr(strings.Join(s.Name, ","))
 		}
 	}
 	if s.Host != nil {
 		if len(s.Host) == 0 {
 			m[shardAllocExcludeSetting+"._host"] = nil
 		} else {
-			m[shardAllocExcludeSetting+"._host"] = strings.Join(s.Host, ",")
+			m[shardAllocExcludeSetting+"._host"] = strPtr(strings.Join(s.Host, ","))
 		}
 	}
 	if s.IP != nil {
 		if len(s.IP) == 0 {
 			m[shardAllocExcludeSetting+"._ip"] = nil
 		} else {
-			m[shardAllocExcludeSetting+"._ip"] = strings.Join(s.IP, ",")
+			m[shardAllocExcludeSetting+"._ip"] = strPtr(strings.Join(s.IP, ","))
 		}
 	}
 	for k, v := range s.Attr {
 		if len(v) == 0 {
 			m[shardAllocExcludeSetting+"."+k] = nil
 		} else {
-			m[shardAllocExcludeSetting+"."+k] = strings.Join(v, ",")
+			m[shardAllocExcludeSetting+"."+k] = strPtr(strings.Join(v, ","))
 		}
 	}
 	return m
+}
+
+func strPtr(s string) *string {
+	return &s
 }

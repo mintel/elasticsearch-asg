@@ -2,69 +2,103 @@ package esasg
 
 import (
 	"context"
+	"io/ioutil"
+	"path/filepath"
 	"testing"
 
 	elastic "github.com/olivere/elastic/v7"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
+	gock "gopkg.in/h2non/gock.v1"
 )
 
 func TestElasticsearchQueryService_Nodes(t *testing.T) {
-	// This test uses Elasticsearch run by docker-compose.
-	// Skip for faster testing.
-	if testing.Short() {
-		t.SkipNow()
-	}
-
 	defer setupLogging(t)()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 
-	client, err := elastic.NewSimpleClient()
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(localhost))
 	if err != nil {
-		zap.L().Panic("couldn't create elastic client", zap.Error(err))
+		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewElasticsearchQueryService(client)
+	s := NewElasticsearchQueryService(esClient)
 
-	ctx := context.Background()
-	nodes, err := s.Nodes(ctx)
-	if assert.NoError(t, err) && assert.Len(t, nodes, 1) {
-		var name string
-		var node *Node
-		for name, node = range nodes {
-			break
-		}
-		assert.Equal(t, name, node.Name)
-		assert.Equal(t, "elasticsearch", node.ClusterName)
-		assert.NotNil(t, node.JVM)
-	}
+	gock.New(localhost).
+		Get("/_nodes/stats").
+		Reply(200).
+		Type("json").
+		BodyString(helperLoadTestData(t, "nodes_stats.json"))
+	gock.New(localhost).
+		Get("/_nodes/_all/_all").
+		Reply(200).
+		Type("json").
+		BodyString(helperLoadTestData(t, "nodes_info.json"))
+	gock.New(localhost).
+		Get(clusterSettingsAPI).
+		Reply(200).
+		Type("json").
+		BodyString(helperLoadTestData(t, "cluster_settings.json"))
+	gock.New(localhost).
+		Get("/_cat/shards").
+		Reply(200).
+		Type("json").
+		BodyString(helperLoadTestData(t, "cat_shards.json"))
+
+	nodes, err := s.Nodes(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, gock.IsDone())
+	assert.Len(t, nodes, 9)
 }
 
 func TestElasticsearchQueryService_Node(t *testing.T) {
-	// This test uses Elasticsearch run by docker-compose.
-	// Skip for faster testing.
-	if testing.Short() {
-		t.SkipNow()
-	}
-
 	defer setupLogging(t)()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 
-	client, err := elastic.NewSimpleClient()
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(localhost))
 	if err != nil {
-		zap.L().Panic("couldn't create elastic client", zap.Error(err))
+		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewElasticsearchQueryService(client)
+	s := NewElasticsearchQueryService(esClient)
 
-	ctx := context.Background()
-	nodes, err := s.Nodes(ctx)
-	var name string
-	var expected *Node
-	for name, expected = range nodes {
-		break
-	}
-	if assert.NoError(t, err) && assert.Len(t, nodes, 1) {
-		n, err := s.Node(ctx, name)
-		assert.NoError(t, err)
-		assert.Equal(t, expected.Name, n.Name)
-	}
+	const (
+		nodeName = "i-0f5c6d4d61d41b9fc"
+	)
+
+	gock.New(localhost).
+		Get("/_nodes/" + nodeName + "/stats").
+		Reply(200).
+		Type("json").
+		BodyString(helperLoadTestData(t, "nodes_stats_"+nodeName+".json"))
+	gock.New(localhost).
+		Get("/_nodes/" + nodeName + "/_all").
+		Reply(200).
+		Type("json").
+		BodyString(helperLoadTestData(t, "nodes_info_"+nodeName+".json"))
+	gock.New(localhost).
+		Get(clusterSettingsAPI).
+		Reply(200).
+		Type("json").
+		BodyString(helperLoadTestData(t, "cluster_settings.json"))
+	gock.New(localhost).
+		Get("/_cat/shards").
+		Reply(200).
+		Type("json").
+		BodyString(helperLoadTestData(t, "cat_shards.json"))
+
+	n, err := s.Node(context.Background(), nodeName)
+	assert.NoError(t, err)
+	assert.True(t, gock.IsDone())
+	assert.NotNil(t, n)
+	assert.Equal(t, nodeName, n.Name)
+	assert.Equal(t, []string{"data"}, n.Roles)
+	assert.Equal(t, map[string]string{
+		"aws_availability_zone":  "us-east-2a",
+		"aws_instance_type":      "i3.large",
+		"aws_instance_lifecycle": "spot",
+		"xpack.installed":        "true",
+		"aws_instance_family":    "i3",
+	}, n.Attributes)
+	assert.Len(t, n.Shards, 1)
 }
 
 func TestParseShardNodes(t *testing.T) {
@@ -106,4 +140,13 @@ func TestParseShardNodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func helperLoadTestData(t *testing.T, name string) string {
+	path := filepath.Join("testdata", name) // relative path
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to load test data file %s: %s", name, err)
+	}
+	return string(data)
 }

@@ -121,8 +121,8 @@ func (s *elasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 		if err != nil {
 			return err
 		}
-		settings = newshardAllocationExcludeSettings(resp.Persistent)
-		tSettings := newshardAllocationExcludeSettings(resp.Transient)
+		settings = newShardAllocationExcludeSettings(resp.Persistent)
+		tSettings := newShardAllocationExcludeSettings(resp.Transient)
 		if len(tSettings.Name) > 0 {
 			settings.Name = tSettings.Name
 		}

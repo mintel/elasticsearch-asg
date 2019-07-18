@@ -20,5 +20,6 @@ require (
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.10.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
+	gopkg.in/h2non/gock.v1 v1.0.15
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 )
