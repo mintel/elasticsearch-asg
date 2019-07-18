@@ -73,7 +73,7 @@ func (s *ClusterPostVotingConfigExclusion) Do(ctx context.Context) (*ClusterPost
 	}
 
 	// Get HTTP response
-	res, err := s.client.PerformRequest(ctx, elastic.PerformRequestOptions{
+	_, err = s.client.PerformRequest(ctx, elastic.PerformRequestOptions{
 		Method: "POST",
 		Path:   path,
 		Params: params,
@@ -83,11 +83,8 @@ func (s *ClusterPostVotingConfigExclusion) Do(ctx context.Context) (*ClusterPost
 	}
 
 	// Return operation response
-	var ret ClusterPostVotingConfigExclusionResponse
-	if err := (&elastic.DefaultDecoder{}).Decode(res.Body, &ret); err != nil {
-		return nil, err
-	}
-	return &ret, nil
+	ret := new(ClusterPostVotingConfigExclusionResponse)
+	return ret, nil
 }
 
 // ClusterPostVotingConfigExclusionResponse represents the response from ClusterPostVotingConfigExclusion.
