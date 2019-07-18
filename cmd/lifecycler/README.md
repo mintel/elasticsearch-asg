@@ -1,5 +1,7 @@
 # lifecycler
 
+[![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-lifecycler.svg)](https://hub.docker.com/r/mintel/elasticsearch-lifecycler)
+
 Regulate AWS Autoscaling of Elasticsearch by delaying new autoscaling actions until cluster is stable.
 
 ## Why

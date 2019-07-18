@@ -1,5 +1,7 @@
 # healthcheck
 
+[![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-healthcheck.svg)](https://hub.docker.com/r/mintel/elasticsearch-healthcheck)
+
 Serve health (`/live`) and readiness (`/ready`) checks for an Elasticsearch node.
 
 Healthy if:

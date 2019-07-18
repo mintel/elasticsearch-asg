@@ -1,5 +1,7 @@
 # snapshooter
 
+[![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-snapshooter.svg)](https://hub.docker.com/r/mintel/elasticsearch-snapshooter)
+
 Create and clean up Elasticsearch snapshots on a schedule.
 
 ## Example

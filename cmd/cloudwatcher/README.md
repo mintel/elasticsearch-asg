@@ -1,5 +1,7 @@
 # cloudwatcher
 
+[![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-cloudwatcher.svg)](https://hub.docker.com/r/mintel/elasticsearch-cloudwatcher)
+
 Cloudwatcher pushes metrics about an Elasticsearch cluster to AWS CloudWatch,
 mainly to run AWS Autoscaling Groups. The metrics include:
 
