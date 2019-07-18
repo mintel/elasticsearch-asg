@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 
 	esasg "github.com/mintel/elasticsearch-asg"
+	"github.com/mintel/elasticsearch-asg/cmd"
 )
 
 const (
@@ -37,7 +38,7 @@ func main() {
 	kingpin.CommandLine.Help = "Push Elasticsearch metrics to AWS CloudWatch to run AWS Autoscaling Groups."
 	kingpin.Parse()
 
-	logger := esasg.SetupLogging()
+	logger := cmd.SetupLogging()
 	defer func() {
 		err := logger.Sync()
 		if err != nil {

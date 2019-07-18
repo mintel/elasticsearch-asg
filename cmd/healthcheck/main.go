@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
-	esasg "github.com/mintel/elasticsearch-asg"
+	"github.com/mintel/elasticsearch-asg/cmd"
 	eshealth "github.com/mintel/elasticsearch-asg/pkg/es/health"
 )
 
@@ -34,7 +34,7 @@ func main() {
 	kingpin.CommandLine.Help = "Handle AWS Autoscaling Group Lifecycle hook events for Elasticsearch from an SQS queue."
 	kingpin.Parse()
 
-	logger := esasg.SetupLogging()
+	logger := cmd.SetupLogging()
 	defer func() {
 		err := logger.Sync()
 		if err != nil {

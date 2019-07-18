@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
-	esasg "github.com/mintel/elasticsearch-asg"
+	"github.com/mintel/elasticsearch-asg/cmd"
 )
 
 const (
@@ -41,7 +41,7 @@ func main() {
 	kingpin.Parse()
 
 	repoName := *repoName
-	logger := esasg.SetupLogging().With(zap.String("snapshot_repository", repoName))
+	logger := cmd.SetupLogging().With(zap.String("snapshot_repository", repoName))
 	defer func() {
 		err := logger.Sync()
 		if err != nil {

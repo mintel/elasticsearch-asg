@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 
 	esasg "github.com/mintel/elasticsearch-asg"
+	"github.com/mintel/elasticsearch-asg/cmd"
 	"github.com/mintel/elasticsearch-asg/pkg/lifecycle"
 	"github.com/mintel/elasticsearch-asg/pkg/squeues"
 )
@@ -49,7 +50,7 @@ func main() {
 	kingpin.CommandLine.Help = "Handle AWS Autoscaling Group Lifecycle hook events for Elasticsearch from an SQS queue."
 	kingpin.Parse()
 
-	logger := esasg.SetupLogging()
+	logger := cmd.SetupLogging()
 	defer func() {
 		err := logger.Sync()
 		if err != nil {
