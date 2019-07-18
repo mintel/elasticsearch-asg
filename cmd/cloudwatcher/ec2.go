@@ -3,11 +3,13 @@ package main
 import (
 	"time"
 
+	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	cache "github.com/patrickmn/go-cache"
-	"go.uber.org/zap"
+
+	cache "github.com/patrickmn/go-cache" // In-memory cache
+	"go.uber.org/zap"                     // Logging
 )
 
 // Cache EC2 instance ID => int count of vcpu cores.

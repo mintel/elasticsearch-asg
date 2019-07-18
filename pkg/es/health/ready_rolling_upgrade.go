@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/heptiolabs/healthcheck"
-
-	"go.uber.org/zap"
+	"github.com/heptiolabs/healthcheck" // Healthchecks framework
+	"go.uber.org/zap"                   // Logging
 )
 
 // CheckReadyRollingUpgrade checks Elasticsearch cluster and index health, but only once during
@@ -15,7 +14,7 @@ import (
 // it disables itself by becoming a no-op.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/rolling-upgrades.html
-func CheckReadyRollingUpgrade(ctx context.Context, url string) healthcheck.Check {
+func CheckReadyRollingUpgrade(url string) healthcheck.Check {
 	doneOnce := false // disable after first success
 	lc := lazyClient{
 		URL: url,
@@ -33,7 +32,7 @@ func CheckReadyRollingUpgrade(ctx context.Context, url string) healthcheck.Check
 			return err
 		}
 
-		resp, err := client.CatHealth().Do(ctx)
+		resp, err := client.CatHealth().Do(context.Background())
 		if err != nil {
 			logger.Info("error getting cluster health: ", zap.Error(err))
 			return err

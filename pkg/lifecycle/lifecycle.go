@@ -1,5 +1,5 @@
-// Package lifecycle impelmments unmarshalling of AWS Autoscaling Group Lifecycle Hook
-// event messages, and provides a KeepAlive function that will keep an event in the
+// Package lifecycle impelmments unmarshaling of AWS Autoscaling Group Lifecycle Hook
+// event messages, and provides a function KeepAlive() that will keep an event in the
 // Transition:Wait state until a function returns true.
 //
 // See: https://docs.aws.amazon.com/autoscaling/ec2/userguide/lifecycle-hooks.html
@@ -11,8 +11,9 @@ import (
 	"errors"
 	"time"
 
-	"go.uber.org/zap"
+	"go.uber.org/zap" // Logging
 
+	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"

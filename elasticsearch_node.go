@@ -3,9 +3,9 @@ package esasg
 import (
 	"sort"
 
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Elasticsearch client extensions
 )
 
 // Node represents info and stats about an Elasticsearch node at a point in time.

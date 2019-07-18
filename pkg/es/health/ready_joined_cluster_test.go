@@ -4,16 +4,17 @@ import (
 	"net/http"
 	"testing"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/assert"
-	gock "gopkg.in/h2non/gock.v1"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"github.com/stretchr/testify/assert"    // Test assertion e.g. equality
+	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
 )
 
 func TestCheckReadyJoinedCluster_passing(t *testing.T) {
-	check, teardown := setup(t, CheckReadyJoinedCluster)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
-	gock.New(localhost).
+	check := CheckReadyJoinedCluster(u)
+	gock.New(u).
 		Get("/_cluster/state/_all/_all").
 		Reply(http.StatusOK).
 		JSON(&elastic.ClusterStateResponse{
@@ -27,10 +28,11 @@ func TestCheckReadyJoinedCluster_passing(t *testing.T) {
 }
 
 func TestCheckReadyJoinedCluster_error(t *testing.T) {
-	check, teardown := setup(t, CheckReadyJoinedCluster)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
-	gock.New(localhost).
+	check := CheckReadyJoinedCluster(u)
+	gock.New(u).
 		Get("/_cluster/state/_all/_all").
 		Reply(http.StatusInternalServerError).
 		BodyString(http.StatusText(http.StatusInternalServerError))
@@ -40,10 +42,11 @@ func TestCheckReadyJoinedCluster_error(t *testing.T) {
 }
 
 func TestCheckReadyJoinedCluster_not_joined(t *testing.T) {
-	check, teardown := setup(t, CheckReadyJoinedCluster)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
-	gock.New(localhost).
+	check := CheckReadyJoinedCluster(u)
+	gock.New(u).
 		Get("/_cluster/state/_all/_all").
 		Reply(http.StatusOK).
 		JSON(&elastic.ClusterStateResponse{

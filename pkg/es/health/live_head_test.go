@@ -4,15 +4,16 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	gock "gopkg.in/h2non/gock.v1"
+	"github.com/stretchr/testify/assert" // Test assertion e.g. equality
+	gock "gopkg.in/h2non/gock.v1"        // HTTP endpoint mocking
 )
 
 func TestCheckLiveHEAD_passing(t *testing.T) {
-	check, teardown := setup(t, CheckLiveHEAD)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
-	gock.New(localhost).
+	check := CheckLiveHEAD(u)
+	gock.New(u).
 		Head("/").
 		Reply(http.StatusOK)
 	err := check()
@@ -21,10 +22,11 @@ func TestCheckLiveHEAD_passing(t *testing.T) {
 }
 
 func TestCheckLiveHEAD_error(t *testing.T) {
-	check, teardown := setup(t, CheckLiveHEAD)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
-	gock.New(localhost).
+	check := CheckLiveHEAD(u)
+	gock.New(u).
 		Head("/").
 		Reply(http.StatusInternalServerError).
 		BodyString(http.StatusText(http.StatusInternalServerError))

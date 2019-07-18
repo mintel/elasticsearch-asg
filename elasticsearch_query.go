@@ -5,12 +5,12 @@ import (
 	"errors"
 	"strings"
 
-	elastic "github.com/olivere/elastic/v7"
-	"go.uber.org/zap"
-	tomb "gopkg.in/tomb.v2"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"go.uber.org/zap"                       // Logging
+	tomb "gopkg.in/tomb.v2"                 // Manage a group of goroutines
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"
-	"github.com/mintel/elasticsearch-asg/pkg/str"
+	"github.com/mintel/elasticsearch-asg/pkg/es"  // Elasticsearch client extensions
+	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
 )
 
 // ErrInconsistentNodes is returned when ElasticsearchQueryService.Nodes()

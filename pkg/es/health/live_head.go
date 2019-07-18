@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/heptiolabs/healthcheck"
-
-	elastic "github.com/olivere/elastic/v7"
-	"go.uber.org/zap"
+	"github.com/heptiolabs/healthcheck"     // Healthchecks framework
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"go.uber.org/zap"                       // Logging
 )
 
 // CheckLiveHEAD checks if a HEAD request to / returns 200.
-func CheckLiveHEAD(ctx context.Context, URL string) healthcheck.Check {
+func CheckLiveHEAD(URL string) healthcheck.Check {
 	lc := lazyClient{
 		URL: URL,
 	}
@@ -21,7 +20,7 @@ func CheckLiveHEAD(ctx context.Context, URL string) healthcheck.Check {
 		if err != nil {
 			return err
 		}
-		resp, err := client.PerformRequest(ctx, elastic.PerformRequestOptions{
+		resp, err := client.PerformRequest(context.Background(), elastic.PerformRequestOptions{
 			Method: "HEAD",
 			Path:   "/",
 		})

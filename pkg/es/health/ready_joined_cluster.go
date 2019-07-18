@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/heptiolabs/healthcheck"
-
-	"go.uber.org/zap"
+	"github.com/heptiolabs/healthcheck" // Healthchecks framework
+	"go.uber.org/zap"                   // Logging
 )
 
 // CheckReadyJoinedCluster checks if a Elasticsearch node has joined a cluster.
-func CheckReadyJoinedCluster(ctx context.Context, url string) healthcheck.Check {
+func CheckReadyJoinedCluster(url string) healthcheck.Check {
 	lc := lazyClient{
 		URL: url,
 	}
@@ -20,7 +19,7 @@ func CheckReadyJoinedCluster(ctx context.Context, url string) healthcheck.Check 
 		if err != nil {
 			return err
 		}
-		resp, err := client.ClusterState().Do(ctx)
+		resp, err := client.ClusterState().Do(context.Background())
 		if err != nil {
 			zap.L().Info("error getting cluster state", zap.Error(err))
 			return err

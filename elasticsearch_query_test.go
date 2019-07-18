@@ -4,42 +4,43 @@ import (
 	"context"
 	"testing"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/assert"
-	gock "gopkg.in/h2non/gock.v1"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"github.com/stretchr/testify/assert"    // Test assertions e.g. equality
+	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
 )
 
 func TestElasticsearchQueryService_Nodes(t *testing.T) {
-	defer setupLogging(t)()
+	u, teardown := setup(t)
+	defer teardown()
+
 	defer gock.OffAll()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(testhost))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	s := NewElasticsearchQueryService(esClient)
-
-	gock.New(testhost).
+	gock.New(u).
 		Get("/_nodes/stats").
 		Reply(200).
 		Type("json").
 		BodyString(loadTestData(t, "nodes_stats.json"))
-	gock.New(testhost).
+	gock.New(u).
 		Get("/_nodes/_all/_all").
 		Reply(200).
 		Type("json").
 		BodyString(loadTestData(t, "nodes_info.json"))
-	gock.New(testhost).
+	gock.New(u).
 		Get("/_cluster/settings").
 		Reply(200).
 		Type("json").
 		BodyString(loadTestData(t, "cluster_settings.json"))
-	gock.New(testhost).
+	gock.New(u).
 		Get("/_cat/shards").
 		Reply(200).
 		Type("json").
 		BodyString(loadTestData(t, "cat_shards.json"))
+
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	if err != nil {
+		t.Fatalf("couldn't create elastic client: %s", err)
+	}
+	s := NewElasticsearchQueryService(esClient)
 
 	nodes, err := s.Nodes(context.Background())
 	assert.NoError(t, err)
@@ -48,40 +49,39 @@ func TestElasticsearchQueryService_Nodes(t *testing.T) {
 }
 
 func TestElasticsearchQueryService_Node(t *testing.T) {
-	defer setupLogging(t)()
+	u, teardown := setup(t)
+	defer teardown()
+
+	const nodeName = "i-0f5c6d4d61d41b9fc"
+
 	defer gock.OffAll()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(testhost))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	s := NewElasticsearchQueryService(esClient)
-
-	const (
-		nodeName = "i-0f5c6d4d61d41b9fc"
-	)
-
-	gock.New(testhost).
+	gock.New(u).
 		Get("/_nodes/" + nodeName + "/stats").
 		Reply(200).
 		Type("json").
 		BodyString(loadTestData(t, "nodes_stats_"+nodeName+".json"))
-	gock.New(testhost).
+	gock.New(u).
 		Get("/_nodes/" + nodeName + "/_all").
 		Reply(200).
 		Type("json").
 		BodyString(loadTestData(t, "nodes_info_"+nodeName+".json"))
-	gock.New(testhost).
+	gock.New(u).
 		Get("/_cluster/settings").
 		Reply(200).
 		Type("json").
 		BodyString(loadTestData(t, "cluster_settings.json"))
-	gock.New(testhost).
+	gock.New(u).
 		Get("/_cat/shards").
 		Reply(200).
 		Type("json").
 		BodyString(loadTestData(t, "cat_shards.json"))
+
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	if err != nil {
+		t.Fatalf("couldn't create elastic client: %s", err)
+	}
+	s := NewElasticsearchQueryService(esClient)
 
 	n, err := s.Node(context.Background(), nodeName)
 	assert.NoError(t, err)

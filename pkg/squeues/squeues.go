@@ -5,14 +5,15 @@ import (
 	"context"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff" // Backoff/retry algorithms
 
+	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 )
 
-// Max number of message that can be received from SQS at once.
+// maxMessages is the max number of message that can be received from SQS at once.
 const maxMessages = 10
 
 var (
@@ -38,7 +39,7 @@ var (
 	sendVisRandomizationFactor = 0.05
 )
 
-// Handler is an interface for handling SQS messages.
+// Handler is an interface for handling messages received from an SQS queue.
 // It's passed into SQS.Run().
 type Handler interface {
 	Handle(context.Context, *sqs.Message) error
@@ -59,8 +60,7 @@ func FuncHandler(fn func(context.Context, *sqs.Message) error) Handler {
 	}
 }
 
-// SQS is a dispatcher for AWS SQS messages, calling a handler function in a
-// goroutine and keeping the message reserved until its finished.
+// SQS is a dispatcher for AWS SQS messages, executing a handler for each message received.
 type SQS struct {
 	client   sqsiface.SQSAPI
 	queueURL string
@@ -90,18 +90,27 @@ func New(client sqsiface.SQSAPI, queueURL string) *SQS {
 	}
 }
 
-// Run consumes messages from the SQS queue and calls handleF as a goroutine for each.
+// Run consumes messages from the SQS queue and calls h.Handle() as a goroutine for each.
 //
-// While handleF is running, the message will periodically have its visibility timeout updated
-// to keep the message reserved. If handleF or any communication with AWS returns a error,
-// the context will be canceled and the error returned. If handleF returns without error,
+// While h is running, the message will periodically have its visibility timeout updated
+// to keep the message reserved. If h or any communication with AWS returns a error,
+// the context will be canceled and the error returned. If h returns without error,
 // the message will be deleted from SQS.
-func (q *SQS) Run(ctx context.Context, h Handler) error {
+func (q *SQS) Run(h Handler) error {
+	return q.RunWithContext(context.Background(), h)
+}
+
+// RunWithContext is the same as Run() but passing a context.
+func (q *SQS) RunWithContext(ctx context.Context, h Handler) error {
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	errc := make(chan error)
 
+	// Use backoff.Ticker here instead of time.Ticker because time.Ticker drops
+	// ticks if no one is receving on its channel, while backoff.Ticker blocks
+	// until the tick is received. Also backoff.Ticker ticks immediately on instantiation.
 	receiveTicker := backoff.NewTicker(backoff.NewConstantBackOff(q.PollTime))
 	defer receiveTicker.Stop()
 	startReceive := receiveTicker.C // Put the channel in a separate var so we can enable/disable by setting nil
@@ -124,12 +133,11 @@ func (q *SQS) Run(ctx context.Context, h Handler) error {
 			return ctx.Err()
 
 		case err := <-errc: // Stop on error.
-			if err != context.Canceled {
-				// Ignore context.Canceled from postpone case
+			if err != context.Canceled { // Ignore context.Canceled from postpone case
 				return err
 			}
 
-		case <-startReceive: // Start SQS message receive.
+		case <-startReceive: // Start SQS message receive operation.
 			var n int
 			if q.MaxConcurrent == 0 {
 				n = maxMessages
@@ -145,17 +153,20 @@ func (q *SQS) Run(ctx context.Context, h Handler) error {
 			go forwardErr(ctx, q.receive(ctx, n, receiveResults), errc)
 			startReceive = nil // Disable start receive case
 
-		case messages := <-receiveResults: // End SQS message receive and start handler goroutines.
+		case messages := <-receiveResults: // End SQS message receive operation.
+			// Start handler goroutines for each message.
 			for _, m := range messages {
 				pendingHandle[*m.ReceiptHandle] = struct{}{}
 				go forwardErr(ctx, q.handle(ctx, h, m, handleResults, postponec), errc)
 			}
+			// If there aren't too many messages pending handle completion,
+			// enable another message receive operation.
 			if q.MaxConcurrent == 0 || len(pendingHandle) < q.MaxConcurrent {
 				startReceive = receiveTicker.C // Enable start receive case
 			}
 
-		case c := <-postponec: // Handle func is taking a while. Extend the message visibility timeout.
-			rh := *c.M.ReceiptHandle
+		case notice := <-postponec: // Handle func is taking a while. Extend the message visibility timeout.
+			rh := *notice.Msg.ReceiptHandle
 			if _, ok := pendingHandle[rh]; !ok {
 				continue // handle already finished
 			}
@@ -165,7 +176,7 @@ func (q *SQS) Run(ctx context.Context, h Handler) error {
 			}
 			msgCtx, cancelPostpone := context.WithCancel(ctx)
 			postponeNotification[rh] = cancelPostpone
-			go forwardErr(ctx, q.changeVisibilityTimeout(msgCtx, c.M, time.Until(c.T)), errc)
+			go forwardErr(ctx, q.changeVisibilityTimeout(msgCtx, notice.Msg, time.Until(notice.Time)), errc)
 
 		case m := <-handleResults: // Delete message when done.
 			go forwardErr(ctx, q.delete(ctx, m), errc)
@@ -266,8 +277,8 @@ func (q *SQS) handle(ctx context.Context, h Handler, m *sqs.Message, done chan<-
 				// Enable send postpone message
 				d = b.NextBackOff().Truncate(visTimeoutIncrement)
 				postponeMsg = postponeNotification{
-					M: m,
-					T: t.Add(d + changeVisBuffer),
+					Msg:  m,
+					Time: t.Add(d + changeVisBuffer),
 				}
 				localPostpone = postpone
 
@@ -317,8 +328,8 @@ func (q *SQS) delete(ctx context.Context, m *sqs.Message) <-chan error {
 }
 
 type postponeNotification struct {
-	M *sqs.Message // Change the visibility timeout of this message to....
-	T time.Time    // this time.
+	Msg  *sqs.Message // Change the visibility timeout of this message to....
+	Time time.Time    // this time.
 }
 
 // forwardErr selects errors from one channel and sends them to another.

@@ -9,23 +9,21 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-const testhost = "http://127.0.0.1:9200"
-
-// setupLogging sets up zap test logging and returns a teardown function.
-func setupLogging(t *testing.T) func() {
+// setup sets up zap test logging. It returns a
+// suitable URL for mock endpoints and a teardown function.
+func setup(t *testing.T) (string, func()) {
 	logger := zaptest.NewLogger(t)
 	f1 := zap.ReplaceGlobals(logger)
 	f2 := zap.RedirectStdLog(logger)
 	teardown := func() {
 		f2()
 		f1()
-		if err := logger.Sync(); err != nil {
-			panic(err)
-		}
+		_ = logger.Sync()
 	}
-	return teardown
+	return "http://127.0.0.1:9200", teardown
 }
 
+// loadTestData is help to load test data from the `testdata` directory.
 func loadTestData(t *testing.T, name string) string {
 	path := filepath.Join("testdata", name) // relative path
 	data, err := ioutil.ReadFile(path)

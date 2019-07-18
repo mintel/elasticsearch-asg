@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JohnCGriffin/overflow"
+	"github.com/JohnCGriffin/overflow" // Detect int/float overflow problems
 )
 
 const (

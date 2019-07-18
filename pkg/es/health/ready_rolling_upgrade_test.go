@@ -4,17 +4,18 @@ import (
 	"net/http"
 	"testing"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/assert"
-	gock "gopkg.in/h2non/gock.v1"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"github.com/stretchr/testify/assert"    // Test assertion e.g. equality
+	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
 )
 
 func TestCheckReadyRollingUpgrade_passing(t *testing.T) {
-	check, teardown := setup(t, CheckReadyRollingUpgrade)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	check := CheckReadyRollingUpgrade(u)
 
-	gock.New(localhost).
+	gock.New(u).
 		Get("/_cat/health").
 		Reply(http.StatusOK).
 		JSON(&elastic.CatHealthResponse{
@@ -40,7 +41,7 @@ func TestCheckReadyRollingUpgrade_passing(t *testing.T) {
 	assert.True(t, gock.IsDone())
 
 	// Calls after first passed check should always pass.
-	gock.New(localhost).
+	gock.New(u).
 		Get("/_cat/health").
 		Reply(http.StatusOK).
 		JSON(&elastic.CatHealthResponse{
@@ -67,10 +68,11 @@ func TestCheckReadyRollingUpgrade_passing(t *testing.T) {
 }
 
 func TestCheckReadyRollingUpgrade_error(t *testing.T) {
-	check, teardown := setup(t, CheckReadyRollingUpgrade)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
-	gock.New(localhost).
+	check := CheckReadyRollingUpgrade(u)
+	gock.New(u).
 		Get("/_cat/health").
 		Reply(http.StatusInternalServerError).
 		BodyString(http.StatusText(http.StatusInternalServerError))
@@ -80,11 +82,12 @@ func TestCheckReadyRollingUpgrade_error(t *testing.T) {
 }
 
 func TestCheckReadyRollingUpgrade_relo(t *testing.T) {
-	check, teardown := setup(t, CheckReadyRollingUpgrade)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	check := CheckReadyRollingUpgrade(u)
 
-	gock.New(localhost).
+	gock.New(u).
 		Get("/_cat/health").
 		Reply(http.StatusOK).
 		JSON(&elastic.CatHealthResponse{
@@ -105,7 +108,6 @@ func TestCheckReadyRollingUpgrade_relo(t *testing.T) {
 				ActiveShardsPercent: "100%",
 			},
 		})
-
 	err := check()
 	assert.Error(t, err)
 
@@ -117,11 +119,12 @@ func TestCheckReadyRollingUpgrade_relo(t *testing.T) {
 }
 
 func TestCheckReadyRollingUpgrade_init(t *testing.T) {
-	check, teardown := setup(t, CheckReadyRollingUpgrade)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	check := CheckReadyRollingUpgrade(u)
 
-	gock.New(localhost).
+	gock.New(u).
 		Get("/_cat/health").
 		Reply(http.StatusOK).JSON(&elastic.CatHealthResponse{
 		elastic.CatHealthResponseRow{
@@ -141,7 +144,6 @@ func TestCheckReadyRollingUpgrade_init(t *testing.T) {
 			ActiveShardsPercent: "100%",
 		},
 	})
-
 	err := check()
 	assert.Error(t, err)
 
@@ -153,11 +155,12 @@ func TestCheckReadyRollingUpgrade_init(t *testing.T) {
 }
 
 func TestCheckReadyRollingUpgrade_red(t *testing.T) {
-	check, teardown := setup(t, CheckReadyRollingUpgrade)
+	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	check := CheckReadyRollingUpgrade(u)
 
-	gock.New(localhost).
+	gock.New(u).
 		Get("/_cat/health").
 		Reply(http.StatusOK).
 		JSON(&elastic.CatHealthResponse{
@@ -178,7 +181,6 @@ func TestCheckReadyRollingUpgrade_red(t *testing.T) {
 				ActiveShardsPercent: "100%",
 			},
 		})
-
 	err := check()
 	assert.Error(t, err)
 

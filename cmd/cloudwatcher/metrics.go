@@ -5,41 +5,60 @@ import (
 	"strings"
 	"time"
 
+	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 
-	esasg "github.com/mintel/elasticsearch-asg"
-	"github.com/mintel/elasticsearch-asg/pkg/str"
+	esasg "github.com/mintel/elasticsearch-asg"   // Complex Elasticsearch services
+	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
 )
 
-// MakeCloudwatchData returns a list of CloudWatch autoscaling
-// metric data points related to an Elasticsearch cluster,
-// including:
+// MakeCloudwatchData returns a list of CloudWatch
+// metric data points related to an Elasticsearch cluster.
+//
+// The metrics are both in total, and broken out by Elasticsearch node role.
+//
+// Metrics include:
 //
 // - File system utilization (data nodes only)
 // - JVM heap utilization (both in total, and per-memory pool)
 // - JVM garbage collection stats
+// - Linux Load
+// - Count of nodes excluded from shard allocation
 //
-// The metrics are both in total, and broken out by node role.
+// Args:
+// - nodes is the sort of output returned by esasg.ElasticsearchQueryService.Nodes().
+// - vcpuCounts is the sort of output returned by GetInstanceVCPUCount().
 func MakeCloudwatchData(nodes map[string]*esasg.Node, vcpuCounts map[string]int) []*cloudwatch.MetricDatum {
-	timestamp := time.Now()
+	timestamp := time.Now() // All metrics have a timestamp.
 
-	roles := []string{"all", "coordinate"}
-	var clusterName string
+	// Get a set of all roles.
+	roles := []string{
+		"all",        // Fake role that matches all nodes.
+		"coordinate", // Fake role that matches nodes that have no other roles.
+	}
+	var clusterName string // Also need the cluster name for later.
 	for _, node := range nodes {
-		clusterName = node.ClusterName
+		if clusterName == "" {
+			clusterName = node.ClusterName
+		} else if clusterName != node.ClusterName {
+			panic("got nodes from two different Elasticsearch clusters")
+		}
 		roles = append(roles, node.Roles...)
 	}
 	roles = str.Uniq(roles...)
-	collectors := make(map[string]*statsCollector, len(roles))
+
+	// Create a metrics collector for each role.
+	collectors := make(map[string]*metricsCollector, len(roles))
 	for _, role := range roles {
-		collectors[role] = newStatsCollector()
+		collectors[role] = newMetricsCollector()
 	}
 
+	// Collect the metrics for each node.
 	for instanceID, node := range nodes {
 		vcpuCount, ok := vcpuCounts[instanceID]
 		if !ok {
-			panic("got ndoes and vcpuCounts with different entries")
+			panic("got nodes and vcpuCounts with different entries")
 		}
 		if len(node.Roles) > 0 {
 			for _, role := range node.Roles {
@@ -51,6 +70,7 @@ func MakeCloudwatchData(nodes map[string]*esasg.Node, vcpuCounts map[string]int)
 		collectors["all"].Add(node, vcpuCount)
 	}
 
+	// Assemble the metrics from all the collectors.
 	metrics := make([]*cloudwatch.MetricDatum, 0)
 	for role, collector := range collectors {
 		dimensions := []*cloudwatch.Dimension{
@@ -68,30 +88,30 @@ func MakeCloudwatchData(nodes map[string]*esasg.Node, vcpuCounts map[string]int)
 	return metrics
 }
 
-// statsCollector aggregates metrics about Elasticsearch nodes useful
-// for autoscaling.
-type statsCollector struct {
+// metricsCollector aggregates CloudWatch metrics about a set of Elasticsearch nodes.
+type metricsCollector struct {
 	// count of nodes added
 	count int
 
-	// JVM heap size
-	maxHeapBytes []float64
+	// JVM heap size (all pools)
+	maxJVMHeapBytes []float64
 
-	// JVM heap used
-	usedHeapBytes []float64
+	// JVM heap used (all pools)
+	usedJVMHeapBytes []float64
+
+	// JVM heap memory pool sizes
+	jvmHeapPools map[string]*struct {
+		Used     []float64
+		Max      []float64
+		PeakUsed []float64
+		PeakMax  []float64
+	}
 
 	// CPU load
 	vcpuCounts []float64
 	load1m     []float64
 	load5m     []float64
 	load15m    []float64
-
-	jvmPools map[string]*struct {
-		Used     []float64
-		Max      []float64
-		PeakUsed []float64
-		PeakMax  []float64
-	}
 
 	// Stats about garbage collectors
 	garbageCollectors map[string]*struct {
@@ -109,15 +129,16 @@ type statsCollector struct {
 	excludedFromAllocation []bool
 }
 
-func newStatsCollector() *statsCollector {
-	return &statsCollector{
-		maxHeapBytes:  make([]float64, 0),
-		usedHeapBytes: make([]float64, 0),
-		vcpuCounts:    make([]float64, 0),
-		load1m:        make([]float64, 0),
-		load5m:        make([]float64, 0),
-		load15m:       make([]float64, 0),
-		jvmPools: make(map[string]*struct {
+// newMetricsCollector returns a new metricsCollector.
+func newMetricsCollector() *metricsCollector {
+	return &metricsCollector{
+		maxJVMHeapBytes:  make([]float64, 0),
+		usedJVMHeapBytes: make([]float64, 0),
+		vcpuCounts:       make([]float64, 0),
+		load1m:           make([]float64, 0),
+		load5m:           make([]float64, 0),
+		load15m:          make([]float64, 0),
+		jvmHeapPools: make(map[string]*struct {
 			Used     []float64
 			Max      []float64
 			PeakUsed []float64
@@ -133,35 +154,40 @@ func newStatsCollector() *statsCollector {
 	}
 }
 
-// Add appends stats about an Elasticsearch node.
-func (s *statsCollector) Add(node *esasg.Node, vcpuCount int) {
-	s.count++
+// Add appends metrics about an Elasticsearch node to this collector.
+func (s *metricsCollector) Add(node *esasg.Node, vcpuCount int) {
+	s.count++ // Increment count of nodes collected.
 
-	s.vcpuCounts = append(s.vcpuCounts, float64(vcpuCount))
+	s.vcpuCounts = append(s.vcpuCounts, float64(vcpuCount)) // Add vCPU count.
 
+	// Add 1m Load.
 	load, ok := node.Stats.OS.CPU.LoadAverage["1m"]
 	if !ok {
 		panic("missing 1m load average")
 	}
 	s.load1m = append(s.load1m, load)
 
+	// Add 5m Load.
 	load, ok = node.Stats.OS.CPU.LoadAverage["5m"]
 	if !ok {
 		panic("missing 5m load average")
 	}
 	s.load5m = append(s.load5m, load)
 
+	// Add 15m Load.
 	load, ok = node.Stats.OS.CPU.LoadAverage["15m"]
 	if !ok {
 		panic("missing 15m load average")
 	}
 	s.load15m = append(s.load15m, load)
 
-	s.maxHeapBytes = append(s.maxHeapBytes, float64(node.Stats.JVM.Mem.HeapMaxInBytes))
-	s.usedHeapBytes = append(s.usedHeapBytes, float64(node.Stats.JVM.Mem.HeapUsedInBytes))
+	// Add JVM heap totals
+	s.maxJVMHeapBytes = append(s.maxJVMHeapBytes, float64(node.Stats.JVM.Mem.HeapMaxInBytes))
+	s.usedJVMHeapBytes = append(s.usedJVMHeapBytes, float64(node.Stats.JVM.Mem.HeapUsedInBytes))
 
+	// Add JVM heap stats for each memory pool
 	for name, p := range node.Stats.JVM.Mem.Pools {
-		d, ok := s.jvmPools[name]
+		d, ok := s.jvmHeapPools[name]
 		if !ok {
 			d = &struct {
 				Used     []float64
@@ -174,7 +200,7 @@ func (s *statsCollector) Add(node *esasg.Node, vcpuCount int) {
 				PeakUsed: make([]float64, 0),
 				PeakMax:  make([]float64, 0),
 			}
-			s.jvmPools[name] = d
+			s.jvmHeapPools[name] = d
 		}
 		d.Used = append(d.Used, float64(p.UsedInBytes))
 		d.Max = append(d.Max, float64(p.MaxInBytes))
@@ -182,6 +208,7 @@ func (s *statsCollector) Add(node *esasg.Node, vcpuCount int) {
 		d.PeakMax = append(d.PeakMax, float64(p.PeakMaxInBytes))
 	}
 
+	// Add JVM garbage collection stats.
 	for name, c := range node.Stats.JVM.GC.Collectors {
 		d, ok := s.garbageCollectors[name]
 		if !ok {
@@ -198,11 +225,13 @@ func (s *statsCollector) Add(node *esasg.Node, vcpuCount int) {
 		d.Time = append(d.Time, float64(c.CollectionTimeInMillis))
 	}
 
+	// Add filesystem stats for data nodes.
 	if str.In("data", node.Roles...) {
 		s.maxFSBytes = append(s.maxFSBytes, float64(node.Stats.FS.Total.TotalInBytes))
 		s.availableFSBytes = append(s.availableFSBytes, float64(node.Stats.FS.Total.AvailableInBytes))
 		s.excludedFromAllocation = append(s.excludedFromAllocation, node.ExcludedShardAllocation)
 	} else {
+		// For non-data nodes, append zeros just to keep slice sizes consistent.
 		s.maxFSBytes = append(s.maxFSBytes, 0)
 		s.availableFSBytes = append(s.availableFSBytes, 0)
 		s.excludedFromAllocation = append(s.excludedFromAllocation, false)
@@ -210,21 +239,29 @@ func (s *statsCollector) Add(node *esasg.Node, vcpuCount int) {
 }
 
 // Metrics returns the CloudWatch metric data points.
-func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp time.Time) []*cloudwatch.MetricDatum {
-	metrics := make([]*cloudwatch.MetricDatum, 0)
-	if s.count == 0 {
+func (s *metricsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp time.Time) []*cloudwatch.MetricDatum {
+	metrics := make([]*cloudwatch.MetricDatum, 0) // The output slice of CloudWatch data points.
+
+	if s.count == 0 { // Shortcut for no nodes Add()-ed.
 		return metrics
 	}
 
+	// Sum vCPU counts.
 	vcpuCount := sum(s.vcpuCounts...)
+
+	// Sum loads.
 	load1m := sum(s.load1m...)
 	load5m := sum(s.load5m...)
 	load15m := sum(s.load15m...)
 
-	maxHeapBytes := sum(s.maxHeapBytes...)
-	usedHeapBytes := sum(s.usedHeapBytes...)
+	// Sum JVM heap totals.
+	maxJVMHeapBytes := sum(s.maxJVMHeapBytes...)
+	usedJVMHeapBytes := sum(s.usedJVMHeapBytes...)
+
+	// Count nodes excluded from shard allocation.
 	countExcludedFromAllocation := countTrue(s.excludedFromAllocation...)
 
+	// Create some CloudWatch data points.
 	metrics = append(metrics,
 		&cloudwatch.MetricDatum{
 			Timestamp:         aws.Time(timestamp),
@@ -304,7 +341,7 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 			Dimensions:        dimensions,
 			Unit:              aws.String(cloudwatch.StandardUnitBytes),
 			StorageResolution: aws.Int64(1),
-			Value:             aws.Float64(maxHeapBytes),
+			Value:             aws.Float64(maxJVMHeapBytes),
 		},
 		&cloudwatch.MetricDatum{
 			Timestamp:         aws.Time(timestamp),
@@ -312,7 +349,7 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 			Dimensions:        dimensions,
 			Unit:              aws.String(cloudwatch.StandardUnitBytes),
 			StorageResolution: aws.Int64(1),
-			Value:             aws.Float64(usedHeapBytes),
+			Value:             aws.Float64(usedJVMHeapBytes),
 		},
 		&cloudwatch.MetricDatum{
 			Timestamp:         aws.Time(timestamp),
@@ -320,16 +357,18 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 			Dimensions:        dimensions,
 			Unit:              aws.String(cloudwatch.StandardUnitPercent),
 			StorageResolution: aws.Int64(1),
-			Value:             aws.Float64(usedHeapBytes / maxHeapBytes * 100), // CloudWatch percents are int 0-100
+			Value:             aws.Float64(usedJVMHeapBytes / maxJVMHeapBytes * 100), // CloudWatch percents are int 0-100
 		},
 	)
 
-	for name, p := range s.jvmPools {
-		name = strings.Title(name)
+	// Sum JVM heap memory pool stats.
+	for name, p := range s.jvmHeapPools {
 		used := sum(p.Used...)
 		max := sum(p.Max...)
 		peakUsed := sum(p.PeakUsed...)
 		peakMax := sum(p.PeakMax...)
+
+		name = strings.Title(name)
 		metrics = append(metrics,
 			&cloudwatch.MetricDatum{
 				Timestamp:         aws.Time(timestamp),
@@ -369,15 +408,17 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 				Dimensions:        dimensions,
 				Unit:              aws.String(cloudwatch.StandardUnitPercent),
 				StorageResolution: aws.Int64(1),
-				Value:             aws.Float64(used / maxHeapBytes * 100), // CloudWatch percents are int 0-100
+				Value:             aws.Float64(used / maxJVMHeapBytes * 100), // CloudWatch percents are int 0-100
 			},
 		)
 	}
 
+	// Sum garbage collection stats.
 	for name, c := range s.garbageCollectors {
-		name = strings.Title(name)
 		count := sum(c.Count...)
 		time := sum(c.Time...)
+
+		name = strings.Title(name)
 		metrics = append(metrics,
 			&cloudwatch.MetricDatum{
 				Timestamp:         aws.Time(timestamp),
@@ -398,8 +439,11 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 		)
 	}
 
-	if sumMaxFSBytes := sum(s.maxFSBytes...); sumMaxFSBytes > 0 {
+	// Sum filesystem utilization stats.
+	if anyNonZero(s.maxFSBytes...) {
+		sumMaxFSBytes := sum(s.maxFSBytes...)
 		sumAvailableFSBytes := sum(s.availableFSBytes...)
+
 		metrics = append(metrics,
 			&cloudwatch.MetricDatum{
 				Timestamp:         aws.Time(timestamp),
@@ -431,6 +475,7 @@ func (s *statsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp t
 	return metrics
 }
 
+// sum returns a sum of d.
 func sum(d ...float64) float64 {
 	var sum float64
 	for _, v := range d {
@@ -439,6 +484,7 @@ func sum(d ...float64) float64 {
 	return sum
 }
 
+// countTrue returns a count of the number of true's in b.
 func countTrue(b ...bool) int {
 	sum := 0
 	for _, v := range b {
@@ -447,4 +493,14 @@ func countTrue(b ...bool) int {
 		}
 	}
 	return sum
+}
+
+// anyNonZero returns true if any fs is non-zero.
+func anyNonZero(fs ...float64) bool {
+	for _, f := range fs {
+		if f != 0 {
+			return true
+		}
+	}
+	return false
 }

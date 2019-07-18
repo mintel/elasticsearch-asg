@@ -62,8 +62,8 @@ func setup(t *testing.T) (*SQS, *mocks.SQSAPI, context.Context, func(), func()) 
 	DefaultInitialVisibilityTimeout = 50 * time.Millisecond
 	DefaultMaxVisibilityTimeout = 300 * time.Millisecond
 	changeVisBuffer = 0
-	visTimeoutIncrement = time.Millisecond
-	DefaultPollTime = 20 * time.Millisecond
+	visTimeoutIncrement = 10 * time.Millisecond
+	DefaultPollTime = 200 * time.Millisecond
 	sendVisRandomizationFactor = 0
 
 	m := &mocks.SQSAPI{}
@@ -81,9 +81,7 @@ func setup(t *testing.T) (*SQS, *mocks.SQSAPI, context.Context, func(), func()) 
 		visTimeoutIncrement = originalVisTimeoutIncrement
 		DefaultPollTime = originalDefaultPollTime
 		sendVisRandomizationFactor = originalSendVisRandomizationFactor
-		if err := logger.Sync(); err != nil {
-			panic(err)
-		}
+		_ = logger.Sync()
 	}
 	return q, m, ctx, cancel, teardown
 }
@@ -138,7 +136,7 @@ func TestSQS_Run(t *testing.T) {
 
 	shouldFinishIn := q.PollTime/2 + msg1Delay + 10*time.Millisecond
 	doCancel := time.AfterFunc(shouldFinishIn, cancel)
-	err := q.Run(ctx, handler)
+	err := q.RunWithContext(ctx, handler)
 
 	assert.False(t, doCancel.Stop(), "stopped before cancel")
 	assert.Equal(t, context.Canceled, err)
@@ -260,10 +258,10 @@ func TestSQS_handle_postpone(t *testing.T) {
 	assert.NoError(t, err)
 	got := <-postpone
 	if assert.NotZero(t, got) {
-		assert.Equal(t, msg, got.M)
+		assert.Equal(t, msg, got.Msg)
 		want := now.Add(2 * q.InitialVisibilityTimeout)
 		delta := time.Duration(float64(q.InitialVisibilityTimeout)*sendVisRandomizationFactor) + time.Millisecond
-		assert.WithinDuration(t, want, got.T, delta)
+		assert.WithinDuration(t, want, got.Time, delta)
 	}
 	assert.Equal(t, msg, <-done)
 	handler.AssertExpectations(t)

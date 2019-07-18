@@ -6,12 +6,12 @@ import (
 	"strings"
 	"sync"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/tidwall/gjson"
-	"go.uber.org/zap"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"github.com/tidwall/gjson"              // Just-In-Time JSON parsing
+	"go.uber.org/zap"                       // Logging
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"
-	"github.com/mintel/elasticsearch-asg/pkg/str"
+	"github.com/mintel/elasticsearch-asg/pkg/es"  // Elasticsearch client extensions
+	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
 )
 
 const shardAllocExcludeSetting = "cluster.routing.allocation.exclude"

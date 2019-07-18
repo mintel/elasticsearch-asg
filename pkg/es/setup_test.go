@@ -12,6 +12,8 @@ import (
 	"github.com/ory/dockertest/docker"
 )
 
+// prefix makes a random string on n hex characters
+// for making unique Docker container names.
 func prefix(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {

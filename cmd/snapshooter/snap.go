@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	ptime "github.com/mintel/elasticsearch-asg/pkg/time"
+	ptime "github.com/mintel/elasticsearch-asg/pkg/time" // Time utilities
 )
 
 // SnapshotWindow represents how often to take Elasticsearch snapshots,
@@ -14,6 +14,8 @@ type SnapshotWindow struct {
 }
 
 // NewSnapshotWindow returns a new SnapshotWindow by parsing two ISO 8601 Duration strings.
+//
+// It returns an error if the duration strings cannot be parsed.
 func NewSnapshotWindow(every, keepFor string) (SnapshotWindow, error) {
 	sw := SnapshotWindow{}
 
@@ -38,6 +40,7 @@ func NewSnapshotWindow(every, keepFor string) (SnapshotWindow, error) {
 type SnapshotWindows []SnapshotWindow
 
 // Next retuns the next Time a snapshot should be created.
+//
 // If this SnapshotWindows is empty, returns the zero Time.
 func (sws SnapshotWindows) Next() time.Time {
 	// Only one snapshot can be creating at the same time.
@@ -45,6 +48,7 @@ func (sws SnapshotWindows) Next() time.Time {
 	return sws.next(time.Now().UTC())
 }
 
+// next is the actual implementation of Next(), separate for testing purposes.
 func (sws SnapshotWindows) next(now time.Time) time.Time {
 	var t time.Time
 	for _, sw := range sws {
@@ -55,7 +59,9 @@ func (sws SnapshotWindows) next(now time.Time) time.Time {
 	return t
 }
 
-// Keep returns false if a snapshot at the given time is old and should be deleted.
+// Keep returns false if a snapshot at the given time does not
+// match the schedule and should be deleted.
+//
 // Always returns false if this SnapshotWindows is empty.
 func (sws SnapshotWindows) Keep(snapshotT time.Time) bool {
 	return sws.keep(time.Now(), snapshotT)

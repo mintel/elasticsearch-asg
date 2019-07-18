@@ -9,16 +9,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
+	"github.com/google/uuid"             // Generate UUIDs
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality
+	"github.com/stretchr/testify/mock"   // Tools for mocking things
+	"go.uber.org/zap"                    // Logging
+	"go.uber.org/zap/zaptest"            // Logging for tests
 
+	// AWS clients and stuff.
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 
-	"github.com/mintel/elasticsearch-asg/pkg/lifecycle/mocks"
+	"github.com/mintel/elasticsearch-asg/pkg/lifecycle/mocks" // Mocked AWS clients.
 )
 
 var (
@@ -55,9 +56,7 @@ func setup(t *testing.T) (*mocks.AutoScalingAPI, context.Context, func(), func()
 		f1()
 		commBufD = originalCommBufD
 		timeoutIncrement = originalTimeoutIncrement
-		if err := logger.Sync(); err != nil {
-			panic(err)
-		}
+		_ = logger.Sync()
 	}
 	return m, ctx, cancel, teardown
 }

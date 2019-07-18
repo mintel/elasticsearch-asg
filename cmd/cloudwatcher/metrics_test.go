@@ -9,17 +9,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/assert"
-	gock "gopkg.in/h2non/gock.v1"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"github.com/stretchr/testify/assert"    // Test assertions
+	gock "gopkg.in/h2non/gock.v1"           // Mock HTTP endpoints
 
+	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
-	esasg "github.com/mintel/elasticsearch-asg"
-	"github.com/mintel/elasticsearch-asg/cmd/cloudwatcher/mocks"
-	"github.com/mintel/elasticsearch-asg/pkg/str"
+	esasg "github.com/mintel/elasticsearch-asg"                  // Complex Elasticsearch services
+	"github.com/mintel/elasticsearch-asg/cmd/cloudwatcher/mocks" // Mocked AWS client(s)
+	"github.com/mintel/elasticsearch-asg/pkg/str"                // String utilities
 )
 
 const (
@@ -253,6 +254,7 @@ func TestMakeCloudwatchData(t *testing.T) {
 	assert.True(t, gock.IsDone())
 }
 
+// loadTestData is help to load test data from the `testdata` directory.
 func loadTestData(t *testing.T, name string) string {
 	path := filepath.Join("testdata", name) // relative path
 	bytes, err := ioutil.ReadFile(path)

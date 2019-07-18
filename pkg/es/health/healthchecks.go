@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
 )
 
 // DefaultHTTPTimeout is the default timeout for sending HTTP requests
@@ -54,50 +54,3 @@ func (lc *lazyClient) Client() (*elastic.Client, error) {
 	}
 	return lc.client, nil
 }
-
-// // NewHandler returns an http Handler configured to test the liveness and readiness
-// // of an Elasticsearch node at URL.
-// func NewHandler(ctx context.Context, URL string) (healthcheck.Handler, error) {
-// 	lc := &lazyClient{URL: URL}
-// 	health := healthcheck.NewHandler()
-
-// 	for name, check := range liveChecks {
-// 		health.AddLivenessCheck(name, healthcheck.Check(func() error {
-// 			return check(ctx, lc)
-// 		}))
-// 	}
-
-// 	for name, check := range readyChecks {
-// 		health.AddReadinessCheck(name, healthcheck.Check(func() error {
-// 			return check(ctx, lc)
-// 		}))
-// 	}
-
-// 	return health, nil
-// }
-
-// // NewMetricsHandler returns an *http.ServeMux that responds to healthcheck and Prometheus metrics requests.
-// // It also returns the healthcheck.Handler is case you want to add additional checks.
-// func NewMetricsHandler(ctx context.Context, URL string) (*http.ServeMux, healthcheck.Handler, error) {
-// 	lc := &lazyClient{URL: URL}
-// 	registry := prometheus.NewRegistry()
-// 	health := healthcheck.NewMetricsHandler(registry, "elasticsearch")
-
-// 	for name, check := range liveChecks {
-// 		health.AddLivenessCheck(name, healthcheck.Check(func() error {
-// 			return check(ctx, lc)
-// 		}))
-// 	}
-
-// 	for name, check := range readyChecks {
-// 		health.AddReadinessCheck(name, healthcheck.Check(func() error {
-// 			return check(ctx, lc)
-// 		}))
-// 	}
-
-// 	mux := http.NewServeMux()
-// 	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-// 	mux.HandleFunc("/live", health.LiveEndpoint)
-// 	mux.HandleFunc("/ready", health.ReadyEndpoint)
-// 	return mux, health, nil
-// }
