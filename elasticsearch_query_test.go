@@ -2,8 +2,6 @@ package esasg
 
 import (
 	"context"
-	"io/ioutil"
-	"path/filepath"
 	"testing"
 
 	elastic "github.com/olivere/elastic/v7"
@@ -26,22 +24,22 @@ func TestElasticsearchQueryService_Nodes(t *testing.T) {
 		Get("/_nodes/stats").
 		Reply(200).
 		Type("json").
-		BodyString(helperLoadTestData(t, "nodes_stats.json"))
+		BodyString(loadTestData(t, "nodes_stats.json"))
 	gock.New(testhost).
 		Get("/_nodes/_all/_all").
 		Reply(200).
 		Type("json").
-		BodyString(helperLoadTestData(t, "nodes_info.json"))
+		BodyString(loadTestData(t, "nodes_info.json"))
 	gock.New(testhost).
 		Get("/_cluster/settings").
 		Reply(200).
 		Type("json").
-		BodyString(helperLoadTestData(t, "cluster_settings.json"))
+		BodyString(loadTestData(t, "cluster_settings.json"))
 	gock.New(testhost).
 		Get("/_cat/shards").
 		Reply(200).
 		Type("json").
-		BodyString(helperLoadTestData(t, "cat_shards.json"))
+		BodyString(loadTestData(t, "cat_shards.json"))
 
 	nodes, err := s.Nodes(context.Background())
 	assert.NoError(t, err)
@@ -68,22 +66,22 @@ func TestElasticsearchQueryService_Node(t *testing.T) {
 		Get("/_nodes/" + nodeName + "/stats").
 		Reply(200).
 		Type("json").
-		BodyString(helperLoadTestData(t, "nodes_stats_"+nodeName+".json"))
+		BodyString(loadTestData(t, "nodes_stats_"+nodeName+".json"))
 	gock.New(testhost).
 		Get("/_nodes/" + nodeName + "/_all").
 		Reply(200).
 		Type("json").
-		BodyString(helperLoadTestData(t, "nodes_info_"+nodeName+".json"))
+		BodyString(loadTestData(t, "nodes_info_"+nodeName+".json"))
 	gock.New(testhost).
 		Get("/_cluster/settings").
 		Reply(200).
 		Type("json").
-		BodyString(helperLoadTestData(t, "cluster_settings.json"))
+		BodyString(loadTestData(t, "cluster_settings.json"))
 	gock.New(testhost).
 		Get("/_cat/shards").
 		Reply(200).
 		Type("json").
-		BodyString(helperLoadTestData(t, "cat_shards.json"))
+		BodyString(loadTestData(t, "cat_shards.json"))
 
 	n, err := s.Node(context.Background(), nodeName)
 	assert.NoError(t, err)
@@ -140,13 +138,4 @@ func TestParseShardNodes(t *testing.T) {
 			}
 		})
 	}
-}
-
-func helperLoadTestData(t *testing.T, name string) string {
-	path := filepath.Join("testdata", name) // relative path
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to load test data file %s: %s", name, err)
-	}
-	return string(data)
 }

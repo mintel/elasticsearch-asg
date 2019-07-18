@@ -1,6 +1,8 @@
 package esasg
 
 import (
+	"io/ioutil"
+	"path/filepath"
 	"testing"
 
 	"go.uber.org/zap"
@@ -22,4 +24,13 @@ func setupLogging(t *testing.T) func() {
 		}
 	}
 	return teardown
+}
+
+func loadTestData(t *testing.T, name string) string {
+	path := filepath.Join("testdata", name) // relative path
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to load test data file %s: %s", name, err)
+	}
+	return string(data)
 }
