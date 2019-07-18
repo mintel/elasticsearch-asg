@@ -16,28 +16,28 @@ func TestElasticsearchQueryService_Nodes(t *testing.T) {
 	defer gock.OffAll()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(localhost))
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(testhost))
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
 	s := NewElasticsearchQueryService(esClient)
 
-	gock.New(localhost).
+	gock.New(testhost).
 		Get("/_nodes/stats").
 		Reply(200).
 		Type("json").
 		BodyString(helperLoadTestData(t, "nodes_stats.json"))
-	gock.New(localhost).
+	gock.New(testhost).
 		Get("/_nodes/_all/_all").
 		Reply(200).
 		Type("json").
 		BodyString(helperLoadTestData(t, "nodes_info.json"))
-	gock.New(localhost).
-		Get(clusterSettingsAPI).
+	gock.New(testhost).
+		Get("/_cluster/settings").
 		Reply(200).
 		Type("json").
 		BodyString(helperLoadTestData(t, "cluster_settings.json"))
-	gock.New(localhost).
+	gock.New(testhost).
 		Get("/_cat/shards").
 		Reply(200).
 		Type("json").
@@ -54,7 +54,7 @@ func TestElasticsearchQueryService_Node(t *testing.T) {
 	defer gock.OffAll()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(localhost))
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(testhost))
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
@@ -64,22 +64,22 @@ func TestElasticsearchQueryService_Node(t *testing.T) {
 		nodeName = "i-0f5c6d4d61d41b9fc"
 	)
 
-	gock.New(localhost).
+	gock.New(testhost).
 		Get("/_nodes/" + nodeName + "/stats").
 		Reply(200).
 		Type("json").
 		BodyString(helperLoadTestData(t, "nodes_stats_"+nodeName+".json"))
-	gock.New(localhost).
+	gock.New(testhost).
 		Get("/_nodes/" + nodeName + "/_all").
 		Reply(200).
 		Type("json").
 		BodyString(helperLoadTestData(t, "nodes_info_"+nodeName+".json"))
-	gock.New(localhost).
-		Get(clusterSettingsAPI).
+	gock.New(testhost).
+		Get("/_cluster/settings").
 		Reply(200).
 		Type("json").
 		BodyString(helperLoadTestData(t, "cluster_settings.json"))
-	gock.New(localhost).
+	gock.New(testhost).
 		Get("/_cat/shards").
 		Reply(200).
 		Type("json").
