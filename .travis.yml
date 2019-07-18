@@ -26,5 +26,10 @@ before_install:
 install:
   - go get -t -v ./...
 
+before_script:
+  # Generate mocks of latest AWS SDK APIs.
+  - go get -u github.com/vektra/mockery/cmd/mockery
+  - go generate ./...
+
 script:
   - go test -race -timeout 5m ./...
