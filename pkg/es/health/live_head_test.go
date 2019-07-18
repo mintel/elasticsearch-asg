@@ -5,31 +5,30 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	gock "gopkg.in/h2non/gock.v1"
 )
 
 func TestCheckLiveHEAD_passing(t *testing.T) {
-	check, _, mux, teardown := setup(t, CheckLiveHEAD)
+	check, teardown := setup(t, CheckLiveHEAD)
 	defer teardown()
-	mux.On("HEAD", "/", nil, nil).Once().Return(http.StatusOK, nil, nil)
+	defer gock.Off()
+	gock.New(localhost).
+		Head("/").
+		Reply(http.StatusOK)
 	err := check()
 	assert.NoError(t, err)
-	mux.AssertExpectations(t)
-}
-
-func TestCheckLiveHEAD_timeout(t *testing.T) {
-	check, _, mux, teardown := setup(t, CheckLiveHEAD)
-	defer teardown()
-	mux.On("HEAD", "/", nil, nil).Once().After(DefaultHTTPTimeout*2).Return(http.StatusOK, nil, nil)
-	err := check()
-	assert.Error(t, err)
-	mux.AssertExpectations(t)
+	assert.True(t, gock.IsDone())
 }
 
 func TestCheckLiveHEAD_error(t *testing.T) {
-	check, _, mux, teardown := setup(t, CheckLiveHEAD)
+	check, teardown := setup(t, CheckLiveHEAD)
 	defer teardown()
-	mux.On("HEAD", "/", nil, nil).Once().Return(http.StatusInternalServerError, nil, http.StatusText(http.StatusInternalServerError))
+	defer gock.Off()
+	gock.New(localhost).
+		Head("/").
+		Reply(http.StatusInternalServerError).
+		BodyString(http.StatusText(http.StatusInternalServerError))
 	err := check()
 	assert.Error(t, err)
-	mux.AssertExpectations(t)
+	assert.True(t, gock.IsDone())
 }

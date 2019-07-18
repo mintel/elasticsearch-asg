@@ -9,6 +9,7 @@ import (
 
 	elastic "github.com/olivere/elastic/v7"
 	"github.com/stretchr/testify/assert"
+	gock "gopkg.in/h2non/gock.v1"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
@@ -16,21 +17,26 @@ import (
 
 	esasg "github.com/mintel/elasticsearch-asg"
 	"github.com/mintel/elasticsearch-asg/mocks"
-	"github.com/mintel/elasticsearch-asg/mocks/mockhttp"
 	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
 
-const delta = 0.001
+const (
+	delta     = 0.001
+	localhost = "http://127.0.0.1:9200"
+)
 
 func TestMakeCloudwatchData(t *testing.T) {
-	server, mux := mockhttp.NewServer()
-	defer server.Close()
-	mux.On("GET", "/_nodes/_all/_all", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "nodes_info.json"))
-	mux.On("GET", "/_nodes/stats", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "nodes_stats.json"))
-	mux.On("GET", "/_cluster/settings", nil, nil).Return(http.StatusOK, nil, helperLoadBytes(t, "cluster_settings.json"))
-	mux.On("GET", "/_cat/shards", nil, nil).Return(http.StatusOK, nil, "[]")
+	defer gock.Off()
+	gock.New(localhost).Get("/_nodes/_all/_all").
+		Reply(http.StatusOK).Type("json").BodyString(loadTestData(t, "nodes_info.json"))
+	gock.New(localhost).Get("/_nodes/stats").
+		Reply(http.StatusOK).Type("json").BodyString(loadTestData(t, "nodes_stats.json"))
+	gock.New(localhost).Get("/_cluster/settings").
+		Reply(http.StatusOK).Type("json").BodyString(loadTestData(t, "cluster_settings.json"))
+	gock.New(localhost).Get("/_cat/shards").
+		Reply(http.StatusOK).Type("json").BodyString("[]")
 
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(server.URL))
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(localhost))
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -242,14 +248,14 @@ func TestMakeCloudwatchData(t *testing.T) {
 		}
 	}
 
-	mux.AssertExpectations(t)
+	assert.True(t, gock.IsDone())
 }
 
-func helperLoadBytes(t *testing.T, name string) []byte {
+func loadTestData(t *testing.T, name string) string {
 	path := filepath.Join("testdata", name) // relative path
 	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		t.Fatalf("failed to load test data file %s: %s", name, err)
 	}
-	return bytes
+	return string(bytes)
 }
