@@ -1,5 +1,7 @@
 package lifecycle
 
+//go:generate sh -c "mockery -name=AutoScalingAPI -dir=$(go list -f '{{.Dir}}' github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface)"
+
 import (
 	"context"
 	"encoding/json"
@@ -9,13 +11,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 
-	"github.com/mintel/elasticsearch-asg/mocks"
+	"github.com/mintel/elasticsearch-asg/pkg/lifecycle/mocks"
 )
 
 var (
@@ -78,7 +81,7 @@ func TestNewEventFromMsg(t *testing.T) {
 			},
 		},
 	}
-	m.On("DescribeLifecycleHooksWithContext", mocks.AnyContext, mIn).Once().Return(mOut, error(nil))
+	m.On("DescribeLifecycleHooksWithContext", AnyContext, mIn).Once().Return(mOut, error(nil))
 
 	start := time.Now().UTC().Round(time.Millisecond)
 	input := fmt.Sprintf(`{
@@ -129,7 +132,7 @@ func TestNewEventFromMsg_testEvent(t *testing.T) {
 			},
 		},
 	}
-	m.On("DescribeLifecycleHooksWithContext", mocks.AnyContext, mIn).Once().Return(mOut, error(nil))
+	m.On("DescribeLifecycleHooksWithContext", AnyContext, mIn).Once().Return(mOut, error(nil))
 
 	start := time.Now().UTC().Round(time.Millisecond)
 	input := fmt.Sprintf(`{
@@ -148,7 +151,7 @@ func TestNewEventFromMsg_testEvent(t *testing.T) {
 	result, err := NewEventFromMsg(ctx, m, []byte(input))
 	assert.Equal(t, ErrTestEvent, err)
 	assert.Nil(t, result)
-	m.AssertNotCalled(t, "DescribeLifecycleHooksWithContext", mocks.AnyContext, mIn)
+	m.AssertNotCalled(t, "DescribeLifecycleHooksWithContext", AnyContext, mIn)
 }
 
 func TestNewEventFromMsg_badTransition(t *testing.T) {
@@ -170,7 +173,7 @@ func TestNewEventFromMsg_badTransition(t *testing.T) {
 			},
 		},
 	}
-	m.On("DescribeLifecycleHooksWithContext", mocks.AnyContext, mIn).Once().Return(mOut, error(nil))
+	m.On("DescribeLifecycleHooksWithContext", AnyContext, mIn).Once().Return(mOut, error(nil))
 
 	start := time.Now().UTC().Round(time.Millisecond)
 	input := fmt.Sprintf(`{
@@ -188,7 +191,7 @@ func TestNewEventFromMsg_badTransition(t *testing.T) {
 	result, err := NewEventFromMsg(ctx, m, []byte(input))
 	assert.Equal(t, ErrUnknownTransition, err)
 	assert.Nil(t, result)
-	m.AssertNotCalled(t, "DescribeLifecycleHooksWithContext", mocks.AnyContext, mIn)
+	m.AssertNotCalled(t, "DescribeLifecycleHooksWithContext", AnyContext, mIn)
 }
 
 func TestNewEventFromMsg_errUnmarshal(t *testing.T) {
@@ -210,7 +213,7 @@ func TestNewEventFromMsg_errUnmarshal(t *testing.T) {
 			},
 		},
 	}
-	m.On("DescribeLifecycleHooksWithContext", mocks.AnyContext, mIn).Once().Return(mOut, error(nil))
+	m.On("DescribeLifecycleHooksWithContext", AnyContext, mIn).Once().Return(mOut, error(nil))
 
 	start := time.Now().UTC().Round(time.Millisecond)
 	input := fmt.Sprintf(`{
@@ -228,7 +231,7 @@ func TestNewEventFromMsg_errUnmarshal(t *testing.T) {
 	result, err := NewEventFromMsg(ctx, m, []byte(input))
 	assert.Nil(t, result)
 	assert.IsType(t, (*json.SyntaxError)(nil), err)
-	m.AssertNotCalled(t, "DescribeLifecycleHooksWithContext", mocks.AnyContext, mIn)
+	m.AssertNotCalled(t, "DescribeLifecycleHooksWithContext", AnyContext, mIn)
 }
 
 func TestKeepAlive(t *testing.T) {
@@ -241,7 +244,7 @@ func TestKeepAlive(t *testing.T) {
 		LifecycleActionToken: aws.String(token),
 	}
 	mOut := &autoscaling.RecordLifecycleActionHeartbeatOutput{}
-	m.On("RecordLifecycleActionHeartbeatWithContext", mocks.AnyContext, mIn).Once().Return(mOut, error(nil))
+	m.On("RecordLifecycleActionHeartbeatWithContext", AnyContext, mIn).Once().Return(mOut, error(nil))
 
 	event := &Event{
 		AccountID:              acctID,
@@ -262,11 +265,19 @@ func TestKeepAlive(t *testing.T) {
 		}
 		return args.Bool(0), args.Error(1)
 	}
-	m.On("cond", mocks.AnyContext, event).Once().Return(false, error(nil)) // Postpone event
-	m.On("cond", mocks.AnyContext, event).Once().Return(true, error(nil))  // Allow event to continue
+	m.On("cond", AnyContext, event).Once().Return(false, error(nil)) // Postpone event
+	m.On("cond", AnyContext, event).Once().Return(true, error(nil))  // Allow event to continue
 
 	err := KeepAlive(ctx, m, event, cond)
 
 	assert.NoError(t, err)
 	m.AssertExpectations(t)
 }
+
+// AnyContext can be used in mock assertions to test that a context.Context was passed.
+//
+//   // func (*SQSAPI) ReceiveMessageWithContext(context.Context, *sqs.ReceiveMessageInput, ...request.Option) (*sqs.ReceiveMessageOutput, error)
+//   m.On("ReceiveMessageWithContext", awsmock.AnyContext, input, awsmock.NilOpts)
+var AnyContext = mock.MatchedBy(func(ctx context.Context) bool {
+	return true
+})

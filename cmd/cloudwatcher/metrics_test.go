@@ -1,5 +1,7 @@
 package main
 
+//go:generate sh -c "mockery -name=EC2API -dir=$(go list -f '{{.Dir}}' github.com/aws/aws-sdk-go/service/ec2/ec2iface)"
+
 import (
 	"context"
 	"io/ioutil"
@@ -16,7 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 
 	esasg "github.com/mintel/elasticsearch-asg"
-	"github.com/mintel/elasticsearch-asg/mocks"
+	"github.com/mintel/elasticsearch-asg/cmd/cloudwatcher/mocks"
 	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
 

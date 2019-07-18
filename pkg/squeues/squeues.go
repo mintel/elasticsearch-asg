@@ -44,8 +44,6 @@ type Handler interface {
 	Handle(context.Context, *sqs.Message) error
 }
 
-//go:generate mockery -name=Handler
-
 type funcHandler struct {
 	Fn func(context.Context, *sqs.Message) error
 }
