@@ -19,15 +19,6 @@ type Node struct {
 	Shards                  es.CatShardsResponse
 }
 
-// NewNodeFromName creates a new Node with the given name.
-func NewNodeFromName(name string) *Node {
-	return &Node{
-		NodesInfoNode: elastic.NodesInfoNode{
-			Name: name,
-		},
-	}
-}
-
 // Indices returns list of of index names present on this shard.
 func (n *Node) Indices() []string {
 	m := make(map[string]struct{})
