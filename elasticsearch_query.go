@@ -20,38 +20,23 @@ var ErrInconsistentNodes = errors.New("got inconsistent nodes from Elasticsearch
 // In case of ErrInconsistentNodes, retry this many times before giving up.
 const defaultInconsistentNodesRetries = 3
 
-// ElasticsearchQueryService describes methods to get information from Elasticsearch.
-type ElasticsearchQueryService interface {
-	// Nodes returns info and stats about the nodes in the Elasticsearch cluster,
-	// as a map from node name to Node.
-	// If names are past, limit to nodes with those names.
-	// It's left up to the caller to check if all the names are in the response.
-	Nodes(ctx context.Context, names ...string) (map[string]*Node, error)
-
-	// Node returns a single node with the given name.
-	// Will return nil if the node doesn't exist.
-	Node(ctx context.Context, name string) (*Node, error)
-}
-
-// elasticsearchQueryService implements the ElasticsearchQueryService interface
-type elasticsearchQueryService struct {
-	ElasticsearchQueryService
-
+// ElasticsearchQueryService implements methods that read from Elasticsearch endpoints.
+type ElasticsearchQueryService struct {
 	client *elastic.Client
 	logger *zap.Logger
 }
 
 // NewElasticsearchQueryService returns a new ElasticsearchQueryService.
-func NewElasticsearchQueryService(client *elastic.Client) ElasticsearchQueryService {
-	return &elasticsearchQueryService{
+func NewElasticsearchQueryService(client *elastic.Client) *ElasticsearchQueryService {
+	return &ElasticsearchQueryService{
 		client: client,
-		logger: zap.L().Named("elasticsearchQueryService"),
+		logger: zap.L().Named("ElasticsearchQueryService"),
 	}
 }
 
 // Node returns a single node with the given name.
 // Will return nil if the node doesn't exist.
-func (s *elasticsearchQueryService) Node(ctx context.Context, name string) (*Node, error) {
+func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (*Node, error) {
 	nodes, err := s.Nodes(ctx, name)
 	if err != nil {
 		return nil, err
@@ -63,7 +48,7 @@ func (s *elasticsearchQueryService) Node(ctx context.Context, name string) (*Nod
 // as a map from node name to Node.
 // If names are past, limit to nodes with those names.
 // It's left up to the caller to check if all the names are in the response.
-func (s *elasticsearchQueryService) Nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
+func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
 	var result map[string]*Node
 	var err error
 	tries := defaultInconsistentNodesRetries
@@ -83,7 +68,7 @@ func (s *elasticsearchQueryService) Nodes(ctx context.Context, names ...string) 
 	return result, err
 }
 
-func (s *elasticsearchQueryService) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
+func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
 	t, ctx := tomb.WithContext(ctx)
 
 	var statsResp *elastic.NodesStatsResponse

@@ -16,46 +16,18 @@ import (
 
 const shardAllocExcludeSetting = "cluster.routing.allocation.exclude"
 
-// ElasticsearchCommandService describes methods to modify Elasticsearch.
-type ElasticsearchCommandService interface {
-	// Drain excludes a node from shard allocation, which will cause Elasticsearch
-	// to remove shards from the node until empty.
-	//
-	// See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-	Drain(ctx context.Context, nodeName string) error
-
-	// Undrain reverses Drain.
-	//
-	// See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-	Undrain(ctx context.Context, nodeName string) error
-
-	// ExcludeMasterVoting excludes a node from voting in master elections
-	// or being eligible to be the master node.
-	// It will return an error if the specified node doesn't have the "master" role.
-	//
-	// See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/voting-config-exclusions.html
-	ExcludeMasterVoting(ctx context.Context, nodeName string) error
-
-	// ClearMasterVotingExclusions removes all master voting exclusions.
-	//
-	// See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/voting-config-exclusions.html
-	ClearMasterVotingExclusions(ctx context.Context) error
-}
-
-// elasticsearchCommandService implements the ElasticsearchCommandService interface.
-type elasticsearchCommandService struct {
-	ElasticsearchCommandService
-
+// ElasticsearchCommandService implements methods that write to Elasticsearch endpoints.
+type ElasticsearchCommandService struct {
 	client     *elastic.Client
 	logger     *zap.Logger
 	settingsMu sync.Mutex // Elasticsearch doesn't provide an atomic way to modify settings
 }
 
 // NewElasticsearchCommandService returns a new ElasticsearchCommandService.
-func NewElasticsearchCommandService(client *elastic.Client) ElasticsearchCommandService {
-	return &elasticsearchCommandService{
+func NewElasticsearchCommandService(client *elastic.Client) *ElasticsearchCommandService {
+	return &ElasticsearchCommandService{
 		client: client,
-		logger: zap.L().Named("elasticsearchCommandService"),
+		logger: zap.L().Named("ElasticsearchCommandService"),
 	}
 }
 
@@ -63,7 +35,7 @@ func NewElasticsearchCommandService(client *elastic.Client) ElasticsearchCommand
 // to remove shards from the node until empty.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-func (s *elasticsearchCommandService) Drain(ctx context.Context, nodeName string) error {
+func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string) error {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 
@@ -92,7 +64,7 @@ func (s *elasticsearchCommandService) Drain(ctx context.Context, nodeName string
 // Undrain reverses Drain.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-func (s *elasticsearchCommandService) Undrain(ctx context.Context, nodeName string) error {
+func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName string) error {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 
@@ -130,7 +102,7 @@ func (s *elasticsearchCommandService) Undrain(ctx context.Context, nodeName stri
 // It will return an error if the specified node doesn't have the "master" role.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/voting-config-exclusions.html
-func (s *elasticsearchCommandService) ExcludeMasterVoting(ctx context.Context, nodeName string) error {
+func (s *ElasticsearchCommandService) ExcludeMasterVoting(ctx context.Context, nodeName string) error {
 	_, err := es.NewClusterPostVotingConfigExclusion(s.client).Node(nodeName).Do(ctx)
 	return err
 }
@@ -138,7 +110,7 @@ func (s *elasticsearchCommandService) ExcludeMasterVoting(ctx context.Context, n
 // ClearMasterVotingExclusions removes all master voting exclusions.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/voting-config-exclusions.html
-func (s *elasticsearchCommandService) ClearMasterVotingExclusions(ctx context.Context) error {
+func (s *ElasticsearchCommandService) ClearMasterVotingExclusions(ctx context.Context) error {
 	_, err := es.NewClusterDeleteVotingConfigExclusion(s.client).Do(ctx)
 	return err
 }
