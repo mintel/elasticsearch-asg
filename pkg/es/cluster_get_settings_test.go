@@ -2,22 +2,17 @@ package es
 
 import (
 	"context"
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestClusterGetSettingsService(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
+	container, client, err := runElasticsearch(t)
+	if err != nil {
+		t.Fatal(err)
 	}
-	defer setupLogging(t)()
-
-	client, err := elastic.NewClient()
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer client.Stop()
+	defer container.Close()
 
 	ctx := context.Background()
 	resp, err := NewClusterGetSettingsService(client).Defaults(true).Do(ctx)

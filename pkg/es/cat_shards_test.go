@@ -4,21 +4,15 @@ import (
 	"context"
 	"testing"
 
-	elastic "github.com/olivere/elastic/v7"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCatShardsService(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
+	container, client, err := runElasticsearch(t)
+	if err != nil {
+		t.Fatal(err)
 	}
-	defer setupLogging(t)()
-
-	client, err := elastic.NewClient()
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer client.Stop()
+	defer container.Close()
 
 	ctx := context.Background()
 
@@ -26,11 +20,6 @@ func TestCatShardsService(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	defer func() {
-		if _, err := client.DeleteIndex("foobar").Do(ctx); err != nil {
-			panic(err)
-		}
-	}()
 
 	resp, err := NewCatShardsService(client).Columns("*").Do(ctx)
 	if assert.NoError(t, err) && assert.NotEmpty(t, resp) {

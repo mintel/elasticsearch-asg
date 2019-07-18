@@ -1,10 +1,9 @@
-COMPOSE := docker-compose
 GO := go
-GOTEST := $(GO) test -race -timeout 10s
+GOTEST := $(GO) test -race -timeout 5m
 
 # Run full test suite.
 test:
-	@$(COMPOSE) up -d elasticsearch localstack && $(COMPOSE) run wait && $(GOTEST) ./...; ret=$$?; $(COMPOSE) down -v && exit $$ret
+	$(GOTEST) ./...
 
 # Run tests sans Docker integration tests.
 test-short:
