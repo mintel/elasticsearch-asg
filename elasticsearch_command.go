@@ -10,8 +10,7 @@ import (
 	"github.com/tidwall/gjson"              // Just-In-Time JSON parsing
 	"go.uber.org/zap"                       // Logging
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"  // Elasticsearch client extensions
-	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Elasticsearch client extensions
 )
 
 const shardAllocExcludeSetting = "cluster.routing.allocation.exclude"
@@ -45,18 +44,24 @@ func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string
 	}
 
 	settings := newShardAllocationExcludeSettings(resp.Transient)
-	if str.In(nodeName, settings.Name...) {
+	sort.Strings(settings.Name)
+	i := sort.SearchStrings(settings.Name, nodeName)            // Index in sorted slice where nodeName should be.
+	if i < len(settings.Name) && settings.Name[i] == nodeName { // Node is already excluded from allocation.
 		return nil
 	}
-	settings.Name = append(settings.Name, nodeName)
-	sort.Strings(settings.Name)
-	// ignore everything but name
+	// Insert nodeName into slice (https://github.com/golang/go/wiki/SliceTricks#insert)
+	settings.Name = append(settings.Name, "")
+	copy(settings.Name[i+1:], settings.Name[i:])
+	settings.Name[i] = nodeName
+
+	// Ignore all node exclusion attributes other than node name.
 	settings.IP = nil
 	settings.Host = nil
 	settings.Attr = nil
 
+	// Update cluster settings with new shard allocation exclusions.
 	settingsMap := settings.Map()
-	body := map[string]interface{}{"transient": settingsMap}
+	body := map[string]map[string]*string{"transient": settingsMap}
 	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(body).Do(ctx)
 	return err
 }
@@ -74,26 +79,23 @@ func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName stri
 	}
 
 	settings := newShardAllocationExcludeSettings(resp.Transient)
-	found := false
-	filtered := settings.Name[:0]
-	for _, name := range settings.Name {
-		if name == nodeName {
-			found = true
-		} else {
-			filtered = append(filtered, name)
-		}
-	}
-	if !found {
+	sort.Strings(settings.Name)
+	i := sort.SearchStrings(settings.Name, nodeName)             // Index in sorted slice where nodeName should be.
+	if i == len(settings.Name) || settings.Name[i] != nodeName { // Node is already not in the shard allocation exclusion list.
 		return nil
 	}
-	sort.Strings(filtered)
-	settings.Name = filtered
-	// ignore everything but name
+	// Remove nodeName from slice (https://github.com/golang/go/wiki/SliceTricks#delete)
+	settings.Name = settings.Name[:i+copy(settings.Name[i:], settings.Name[i+1:])]
+
+	// Ignore all node exclusion attributes other than node name.
 	settings.IP = nil
 	settings.Host = nil
 	settings.Attr = nil
 
-	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(map[string]interface{}{"transient": settings.Map()}).Do(ctx)
+	// Update cluster settings with new shard allocation exclusions.
+	settingsMap := settings.Map()
+	body := map[string]map[string]*string{"transient": settingsMap}
+	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(body).Do(ctx)
 	return err
 }
 
