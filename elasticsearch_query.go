@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
 	"go.uber.org/zap"                       // Logging
-	tomb "gopkg.in/tomb.v2"                 // Manage a group of goroutines
 
 	"github.com/mintel/elasticsearch-asg/pkg/es"  // Elasticsearch client extensions
 	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
@@ -69,42 +69,62 @@ func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) 
 }
 
 func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
-	t, ctx := tomb.WithContext(ctx)
+	// We collect information from 4 Elasticsearch endpoints.
+	// The requests are send concurrently by separate goroutines.
+	var statsResp *elastic.NodesStatsResponse    // Node stats
+	var infoResp *elastic.NodesInfoResponse      // Node info
+	var shardsResp es.CatShardsResponse          // Shards
+	var settings *shardAllocationExcludeSettings // Cluster settings
 
-	var statsResp *elastic.NodesStatsResponse
-	t.Go(func() error {
+	wg := sync.WaitGroup{}      // Counter of running goroutines that can be waited on.
+	wg.Add(4)                   // Add 4 because 4 goroutines.
+	done := make(chan struct{}) // Channel that gets closed to signal that all goroutines are done.
+	errc := make(chan error, 4) // Channel that is used by the goroutines to send any errors that occur.
+	go func() {
+		wg.Wait()   // Once all goroutines finish...
+		close(done) // close done to signal the parent goroutine.
+	}()
+
+	ctx, cancel := context.WithCancel(ctx) // If there's an error in one of the goroutines, abort the rest by sharing a common context.
+	defer cancel()                         // Early return due to error will trigger this.
+
+	// Get node stats
+	go func() {
+		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
-		rs := s.client.NodesStats()
-		if len(names) > 0 {
-			rs = rs.NodeId(names...)
+		statsResp, err = s.client.NodesStats().NodeId(names...).Do(ctx)
+		if err != nil {
+			errc <- err
 		}
-		statsResp, err = rs.Do(ctx)
-		return err
-	})
+	}()
 
-	var infoResp *elastic.NodesInfoResponse
-	t.Go(func() error {
+	// Get node info
+	go func() {
+		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
-		rs := s.client.NodesInfo()
-		if len(names) > 0 {
-			rs = rs.NodeId(names...)
+		infoResp, err = s.client.NodesInfo().NodeId(names...).Do(ctx)
+		if err != nil {
+			errc <- err
 		}
-		infoResp, err = rs.Do(ctx)
-		return err
-	})
+	}()
 
-	var shardsResp es.CatShardsResponse
-	t.Go(func() error {
+	// Get shards
+	go func() {
+		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
 		shardsResp, err = es.NewCatShardsService(s.client).Do(ctx)
-		return err
-	})
+		if err != nil {
+			errc <- err
+		}
+	}()
 
-	var settings *shardAllocationExcludeSettings
-	t.Go(func() error {
+	// Get cluster settings
+	go func() {
+		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		resp, err := es.NewClusterGetSettingsService(s.client).FilterPath("*." + shardAllocExcludeSetting + ".*").Do(ctx)
 		if err != nil {
-			return err
+			errc <- err
+			return
 		}
 		settings = newShardAllocationExcludeSettings(resp.Persistent)
 		tSettings := newShardAllocationExcludeSettings(resp.Transient)
@@ -122,12 +142,18 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 				settings.Attr[k] = v
 			}
 		}
-		return nil
-	})
+	}()
 
-	if err := t.Wait(); err != nil {
+	// Wait for an error, or all the goroutines to finish.
+	select {
+	case err := <-errc:
 		return nil, err
-	} else if len(statsResp.Nodes) != len(infoResp.Nodes) {
+	case <-done:
+		close(errc) // Release resources.
+	}
+
+	// Check if results have the same number of nodes.
+	if len(statsResp.Nodes) != len(infoResp.Nodes) {
 		statsNodes := make([]string, 0, len(statsResp.Nodes))
 		for name := range statsResp.Nodes {
 			statsNodes = append(statsNodes, name)
@@ -143,6 +169,7 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 		return nil, ErrInconsistentNodes
 	}
 
+	// Merge all endpoint responses into a single set of Nodes.
 	nodes := make(map[string]*Node, len(statsResp.Nodes))
 	for _, ni := range infoResp.Nodes {
 		ip := strings.Split(ni.IP, ":")[0] // Remove port number
@@ -205,7 +232,8 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 	return nodes, nil
 }
 
-// parseShardNodes parses the node string response from the /_cat/shards endpoint.
+// parseShardNodes parses the node name from the /_cat/shards endpoint response
+// .
 // This could be one of:
 // - An empty string for an unassigned shard.
 // - A node name for an normal shard.
