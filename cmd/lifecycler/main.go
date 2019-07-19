@@ -20,8 +20,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	esasg "github.com/mintel/elasticsearch-asg"         //
+	esasg "github.com/mintel/elasticsearch-asg"         // Complex Elasticsearch services
 	"github.com/mintel/elasticsearch-asg/cmd"           // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/pkg/es"        // Elasticsearch client extensions
 	"github.com/mintel/elasticsearch-asg/pkg/lifecycle" // Handle AWS Autoscaling Group lifecycle hook event messages.
 	"github.com/mintel/elasticsearch-asg/pkg/squeues"   // SQS message dispatcher
 )
@@ -174,7 +175,7 @@ func main() {
 			if n.IsMaster() { // Has "master" role.
 				logger.Debug("setting master voting exclusion")
 				votingLock.Lock()
-				if err := esCommand.ExcludeMasterVoting(ctx, n.Name); err != nil {
+				if _, err := es.NewClusterPostVotingConfigExclusion(esClient).Node(n.Name).Do(ctx); err != nil {
 					votingLock.Unlock()
 					return err
 				}
@@ -187,7 +188,7 @@ func main() {
 					// lifecycle event currently being handled.
 					if atomic.AddInt32(&votingCount, -1) == 0 {
 						logger.Debug("clearing voting exclusion configuration")
-						if err := esCommand.ClearMasterVotingExclusions(ctx); err != nil {
+						if _, err := es.NewClusterDeleteVotingConfigExclusion(esClient).Do(ctx); err != nil {
 							logger.Fatal("error clearing voting exclusion configuration", zap.Error(err))
 						}
 					}

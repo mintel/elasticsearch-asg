@@ -97,24 +97,6 @@ func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName stri
 	return err
 }
 
-// ExcludeMasterVoting excludes a node from voting in master elections
-// or being eligible to be the master node.
-// It will return an error if the specified node doesn't have the "master" role.
-//
-// See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/voting-config-exclusions.html
-func (s *ElasticsearchCommandService) ExcludeMasterVoting(ctx context.Context, nodeName string) error {
-	_, err := es.NewClusterPostVotingConfigExclusion(s.client).Node(nodeName).Do(ctx)
-	return err
-}
-
-// ClearMasterVotingExclusions removes all master voting exclusions.
-//
-// See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/voting-config-exclusions.html
-func (s *ElasticsearchCommandService) ClearMasterVotingExclusions(ctx context.Context) error {
-	_, err := es.NewClusterDeleteVotingConfigExclusion(s.client).Do(ctx)
-	return err
-}
-
 // shardAllocationExcludeSettings represents the transient shard allocation exclusions
 // of an Elasticsearch cluster.
 type shardAllocationExcludeSettings struct {
