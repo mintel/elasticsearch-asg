@@ -233,7 +233,7 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 }
 
 // parseShardNodes parses the node name from the /_cat/shards endpoint response
-// .
+//
 // This could be one of:
 // - An empty string for an unassigned shard.
 // - A node name for an normal shard.
