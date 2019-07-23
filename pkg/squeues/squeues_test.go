@@ -9,449 +9,405 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"math"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
+	"github.com/cenkalti/backoff"       // Backoff/retry utils
+	"github.com/google/uuid"            // Generate UUIDs
+	"github.com/stretchr/testify/mock"  // Mocking
+	"github.com/stretchr/testify/suite" // Test suite for setup and teardown
 
+	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	"github.com/mintel/elasticsearch-asg/pkg/squeues/mocks"
+	"github.com/mintel/elasticsearch-asg/pkg/squeues/mocks" // Mocked interfaces
 )
 
 const (
-	queueURL = "https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"
-	msgBody  = "i am a message body"
+	testQueueURL                        = "https://sqs.us-east-2.amazonaws.com/123456789012/MyQueue"
+	testSecond                          = 25 * time.Millisecond
+	testDefaultInitialVisibilityTimeout = 10 * testSecond
+	testDefaultMaxVisibilityTimeout     = 25 * testSecond
+	testAWSCommBuffer                   = 2 * testSecond
+	testDefaultPollTime                 = 4 * testSecond
+	testSendVisRandomizationFactor      = 0
 )
 
-func makeMsg() *sqs.Message {
+// makeMsg makes a fake SQS message.
+func makeMsg(name string) *sqs.Message {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		panic(err)
 	}
-	messageID := base64.URLEncoding.EncodeToString(b)
-	h := md5.Sum([]byte(msgBody))
-	receiptHandle := uuid.New().String()
+	messageID := base64.URLEncoding.EncodeToString(b) + "-" + name
+	h := md5.Sum([]byte(name))
+	receiptHandle := uuid.New().String() + "-" + name
 	return &sqs.Message{
 		MessageId:     aws.String(messageID),
-		MD5OfBody:     aws.String(string(h[:])),
-		Body:          aws.String(msgBody),
+		MD5OfBody:     aws.String(base64.URLEncoding.EncodeToString(h[:])),
+		Body:          aws.String(name),
 		ReceiptHandle: aws.String(receiptHandle),
 	}
 }
 
-func setup(t *testing.T) (*SQS, *mocks.SQSAPI, context.Context, func(), func()) {
-	logger := zaptest.NewLogger(t)
-	f1 := zap.ReplaceGlobals(logger)
-	f2 := zap.RedirectStdLog(logger)
+// DispatcherTestSuite runs tests for Dispatcher,
+// doing setup and teardown before and after each test.
+type DispatcherTestSuite struct {
+	suite.Suite
+
+	originalDefaultInitialVisibilityTimeout time.Duration
+	originalDefaultMaxVisibilityTimeout     time.Duration
+	originalAWSCommBuffer                   time.Duration
+	originalSecond                          time.Duration
+	originalDefaultPollTime                 time.Duration
+	originalSendVisRandomizationFactor      float64
+
+	SUT     *Dispatcher // System Under Test
+	MockSQS *mocks.SQSAPI
+}
+
+// SetupTest runs before each test.
+func (suite *DispatcherTestSuite) SetupTest() {
+	suite.originalDefaultInitialVisibilityTimeout = DefaultInitialVisibilityTimeout
+	suite.originalDefaultMaxVisibilityTimeout = DefaultMaxVisibilityTimeout
+	suite.originalAWSCommBuffer = awsCommBuffer
+	suite.originalSecond = second
+	suite.originalDefaultPollTime = DefaultPollTime
+	suite.originalSendVisRandomizationFactor = sendVisRandomizationFactor
+
+	// Set global package vars to smaller, more stable values.
+	// Otherwise tests would take _way_ too long.
+	DefaultInitialVisibilityTimeout = testDefaultInitialVisibilityTimeout
+	DefaultMaxVisibilityTimeout = testDefaultMaxVisibilityTimeout
+	awsCommBuffer = testAWSCommBuffer
+	second = testSecond
+	DefaultPollTime = testDefaultPollTime
+	sendVisRandomizationFactor = testSendVisRandomizationFactor
+
+	// Set up mock AWS SQS client.
+	suite.MockSQS = &mocks.SQSAPI{}
+	suite.MockSQS.Test(suite.T())
+
+	// Set up Dispatcher.
+	suite.SUT = New(suite.MockSQS, testQueueURL)
+}
+
+// TearDownTest runs after each test.
+func (suite *DispatcherTestSuite) TearDownTest() {
+	// Assert that the mock was called as expected.
+	suite.MockSQS.AssertExpectations(suite.T())
+
+	// Reset original global package vars.
+	DefaultInitialVisibilityTimeout = suite.originalDefaultInitialVisibilityTimeout
+	DefaultMaxVisibilityTimeout = suite.originalDefaultMaxVisibilityTimeout
+	awsCommBuffer = suite.originalAWSCommBuffer
+	second = suite.originalSecond
+	DefaultPollTime = suite.originalDefaultPollTime
+	sendVisRandomizationFactor = suite.originalSendVisRandomizationFactor
+}
+
+// TestNew tests new Dispatcher defaults.
+func (suite *DispatcherTestSuite) TestNew() {
+	suite.Equal(0, suite.SUT.MaxConcurrent)
+	suite.Equal(testDefaultPollTime, suite.SUT.PollTime)
+	suite.Equal(testDefaultInitialVisibilityTimeout, suite.SUT.InitialVisibilityTimeout)
+	suite.Equal(testDefaultMaxVisibilityTimeout, suite.SUT.MaxVisibilityTimeout)
+}
+
+// TestRunWithContext tests the Dispatcher.RunWithContext method.
+func (suite *DispatcherTestSuite) TestRunWithContext() {
+	// Make some fake SQS messages.
+	msg1 := makeMsg("msg1")
+	msg2 := makeMsg("msg2")
+	msg3 := makeMsg("msg3")
+	suite.SUT.MaxConcurrent = 2
+
+	// Create a mock handler that will be call once for each message.
+	handler := &mocks.Handler{}
+	handler.Test(suite.T())
+
+	// Generate the sequence off message visibility timeouts we expect.
+	boff := suite.SUT.backoff()
+	timeout1 := boff()
+	timeout2 := boff()
+	timeout3 := boff()
+
+	totalExpectedRunTime := 0 * time.Nanosecond // Keep track of how long we expect the test to take.
+
+	// Describe sequence of expected mock calls, then call RunWithContext().
+	//
+	// Step 1: Dispatcher will try to receives messages, gets none within PollTimeout.
+	expectedReceiveInput := &sqs.ReceiveMessageInput{
+		QueueUrl:            aws.String(testQueueURL),
+		MaxNumberOfMessages: aws.Int64(int64(suite.SUT.MaxConcurrent)),
+		VisibilityTimeout:   aws.Int64(numSeconds(ceilSeconds(suite.SUT.InitialVisibilityTimeout))),
+		WaitTimeSeconds:     aws.Int64(numSeconds(suite.SUT.PollTime)),
+	}
+	suite.MockSQS.On("ReceiveMessageWithContext", AnyContext, expectedReceiveInput).
+		After(suite.SUT.PollTime).
+		Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{}}, error(nil)).
+		Once()
+	totalExpectedRunTime += suite.SUT.PollTime
+
+	// Step 2: Dispatcher will try to receives messages again, this time gets the first two.
+	suite.MockSQS.On("ReceiveMessageWithContext", AnyContext, expectedReceiveInput).
+		After(suite.SUT.PollTime/2).
+		Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{msg1, msg2}}, error(nil)).
+		Once()
+	totalExpectedRunTime += suite.SUT.PollTime / 2
+
+	// Step 3a: handler is called for msg1. It succeeds immediately and gets deleted.
+	handler.On("Handle", AnyContext, msg1).
+		Return(error(nil)).
+		Once()
+	suite.MockSQS.On("DeleteMessageWithContext", AnyContext, &sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(testQueueURL),
+		ReceiptHandle: msg1.ReceiptHandle,
+	}).Return(&sqs.DeleteMessageOutput{}, error(nil)).Once()
+
+	// Step 3b: handler is called for msg2. It succeeds but only after
+	// the visibility timeout needs to be updated, then gets deleted.
+	handler.On("Handle", AnyContext, msg2).
+		After(timeout1 + timeout2/2). // Return half way through the second timeout
+		Return(error(nil)).
+		Once()
+	suite.MockSQS.On("ChangeMessageVisibilityWithContext", AnyContext, &sqs.ChangeMessageVisibilityInput{
+		QueueUrl:          aws.String(testQueueURL),
+		ReceiptHandle:     msg2.ReceiptHandle,
+		VisibilityTimeout: aws.Int64(numSeconds(ceilSeconds(timeout2))),
+	}).Return(&sqs.ChangeMessageVisibilityOutput{}, error(nil)).Once()
+	suite.MockSQS.On("DeleteMessageWithContext", AnyContext, &sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(testQueueURL),
+		ReceiptHandle: msg2.ReceiptHandle,
+	}).Return(&sqs.DeleteMessageOutput{}, error(nil)).Once()
+
+	// Step 4: Dispatcher will try to receives messages again, this time gets the last one.
+	expectedReceiveInput = &sqs.ReceiveMessageInput{
+		QueueUrl:            aws.String(testQueueURL),
+		MaxNumberOfMessages: aws.Int64(1), // 1 because msg2 should still be in progress.
+		VisibilityTimeout:   aws.Int64(numSeconds(ceilSeconds(suite.SUT.InitialVisibilityTimeout))),
+		WaitTimeSeconds:     aws.Int64(numSeconds(suite.SUT.PollTime)),
+	}
+	suite.MockSQS.On("ReceiveMessageWithContext", AnyContext, expectedReceiveInput).
+		After(suite.SUT.PollTime/2).
+		Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{msg3}}, error(nil)).
+		Once()
+	// Thereafter, calls to ReceiveMessageWithContext return no messages.
+	suite.MockSQS.On("ReceiveMessageWithContext", AnyContext, expectedReceiveInput).
+		After(suite.SUT.PollTime).
+		Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{}}, error(nil)).
+		Maybe()
+	totalExpectedRunTime += suite.SUT.PollTime / 2
+
+	// Step 5: handler is called for msg3. It fails on the third timeout update.
+	msg3Err := errors.New("msg3Err")
+	failAfter := timeout1 + timeout2 + timeout3/2 // Return half way through the third timeout.
+	handler.On("Handle", AnyContext, msg3).
+		After(failAfter).
+		Return(msg3Err).
+		Once()
+	suite.MockSQS.On("ChangeMessageVisibilityWithContext", AnyContext, &sqs.ChangeMessageVisibilityInput{
+		QueueUrl:          aws.String(testQueueURL),
+		ReceiptHandle:     msg3.ReceiptHandle,
+		VisibilityTimeout: aws.Int64(numSeconds(ceilSeconds(timeout2))),
+	}).Return(&sqs.ChangeMessageVisibilityOutput{}, error(nil)).Once()
+	suite.MockSQS.On("ChangeMessageVisibilityWithContext", AnyContext, &sqs.ChangeMessageVisibilityInput{
+		QueueUrl:          aws.String(testQueueURL),
+		ReceiptHandle:     msg3.ReceiptHandle,
+		VisibilityTimeout: aws.Int64(numSeconds(ceilSeconds(timeout3))),
+	}).Return(&sqs.ChangeMessageVisibilityOutput{}, error(nil)).Once()
+	totalExpectedRunTime += failAfter
+
+	// Run the Dispatcher with a timeout.
+	ctx, cancel := context.WithCancel(context.Background())
+	shouldFinishWithin := time.Duration(totalExpectedRunTime * 2) // Add a little buffer time.
+	doCancel := time.AfterFunc(shouldFinishWithin, cancel)
+	err := suite.SUT.RunWithContext(ctx, handler)
+
+	suite.True(doCancel.Stop(), "timed out")
+	suite.Equal(msg3Err, err)
+	handler.AssertCalled(suite.T(), "Handle", AnyContext, msg1)
+	handler.AssertCalled(suite.T(), "Handle", AnyContext, msg2)
+	handler.AssertCalled(suite.T(), "Handle", AnyContext, msg3)
+	handler.AssertExpectations(suite.T())
+}
+
+// TestReceiveMessages tests the Dispatcher.receiveMessages method.
+func (suite *DispatcherTestSuite) TestReceiveMessages() {
+	const numMessages = 5
+	messages := make([]*sqs.Message, 5)
+	for i := range messages {
+		messages[i] = makeMsg("msg" + strconv.Itoa(i))
+	}
+
+	suite.Run("success", func() {
+		suite.MockSQS.On("ReceiveMessageWithContext", AnyContext, &sqs.ReceiveMessageInput{
+			QueueUrl:            aws.String(testQueueURL),
+			MaxNumberOfMessages: aws.Int64(numMessages),
+			VisibilityTimeout:   aws.Int64(numSeconds(ceilSeconds(suite.SUT.InitialVisibilityTimeout))),
+			WaitTimeSeconds:     aws.Int64(numSeconds(suite.SUT.PollTime)),
+		}).Return(&sqs.ReceiveMessageOutput{Messages: messages}, error(nil)).Once()
+		result, err := suite.SUT.receiveMessages(context.Background(), numMessages)
+		suite.NoError(err)
+		suite.Equal(messages, result)
+	})
+
+	suite.Run("error", func() {
+		const errMsg = "a foobar happened"
+		suite.MockSQS.On("ReceiveMessageWithContext", AnyContext, &sqs.ReceiveMessageInput{
+			QueueUrl:            aws.String(testQueueURL),
+			MaxNumberOfMessages: aws.Int64(numMessages),
+			VisibilityTimeout:   aws.Int64(numSeconds(ceilSeconds(suite.SUT.InitialVisibilityTimeout))),
+			WaitTimeSeconds:     aws.Int64(numSeconds(suite.SUT.PollTime)),
+		}).Return((*sqs.ReceiveMessageOutput)(nil), errors.New(errMsg)).Once()
+		result, err := suite.SUT.receiveMessages(context.Background(), numMessages)
+		suite.EqualError(err, errMsg)
+		suite.Nil(result)
+	})
+}
+
+// TestDeleteMessage tests the Dispatcher.deleteMessage method.
+func (suite *DispatcherTestSuite) TestDeleteMessage() {
+	msg := makeMsg("msg")
+
+	suite.Run("success", func() {
+		suite.MockSQS.On("DeleteMessageWithContext", AnyContext, &sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(testQueueURL),
+			ReceiptHandle: msg.ReceiptHandle,
+		}).Return(&sqs.DeleteMessageOutput{}, error(nil)).Once()
+		err := suite.SUT.deleteMessage(context.Background(), *msg.ReceiptHandle)
+		suite.NoError(err)
+	})
+
+	suite.Run("error", func() {
+		const errMsg = "a foobar happened"
+		suite.MockSQS.On("DeleteMessageWithContext", AnyContext, &sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(testQueueURL),
+			ReceiptHandle: msg.ReceiptHandle,
+		}).Return((*sqs.DeleteMessageOutput)(nil), errors.New(errMsg)).Once()
+		err := suite.SUT.deleteMessage(context.Background(), *msg.ReceiptHandle)
+		suite.EqualError(err, errMsg)
+	})
+}
+
+// TestUpdateMessageVisibility tests the Dispatcher.updateMessageVisibility method.
+func (suite *DispatcherTestSuite) TestUpdateMessageVisibility() {
+	msg := makeMsg("msg")
+	d := 8 * time.Second
+
+	suite.Run("success", func() {
+		suite.MockSQS.On("ChangeMessageVisibilityWithContext", AnyContext, &sqs.ChangeMessageVisibilityInput{
+			QueueUrl:          aws.String(testQueueURL),
+			ReceiptHandle:     msg.ReceiptHandle,
+			VisibilityTimeout: aws.Int64(numSeconds(ceilSeconds(d))),
+		}).Return(&sqs.ChangeMessageVisibilityOutput{}, error(nil)).Once()
+		err := suite.SUT.updateMessageVisibility(context.Background(), *msg.ReceiptHandle, d)
+		suite.NoError(err)
+	})
+
+	suite.Run("error", func() {
+		const errMsg = "a foobar happened"
+		suite.MockSQS.On("ChangeMessageVisibilityWithContext", AnyContext, &sqs.ChangeMessageVisibilityInput{
+			QueueUrl:          aws.String(testQueueURL),
+			ReceiptHandle:     msg.ReceiptHandle,
+			VisibilityTimeout: aws.Int64(numSeconds(ceilSeconds(d))),
+		}).Return((*sqs.ChangeMessageVisibilityOutput)(nil), errors.New(errMsg)).Once()
+		err := suite.SUT.updateMessageVisibility(context.Background(), *msg.ReceiptHandle, d)
+		suite.EqualError(err, errMsg)
+	})
+}
+
+// TestBackoff tests the Dispatcher.backoff method.
+func (suite *DispatcherTestSuite) TestBackoff() {
+	boff := suite.SUT.backoff()
+	for i := 0; i < 5; i++ {
+		suite.Run("loop-"+strconv.Itoa(i), func() {
+			want := time.Duration(float64(suite.SUT.InitialVisibilityTimeout) * math.Pow(backoff.DefaultMultiplier, float64(i)))
+			want = minD(want, suite.SUT.MaxVisibilityTimeout) // Never more than max tmieout
+			got := boff()
+			suite.Equal(want, got)
+		})
+	}
+}
+
+// TestNotifyChangeMessageVisibility tests the Dispatcher.notifyChangeMessageVisibility method.
+func (suite *DispatcherTestSuite) TestNotifyChangeMessageVisibility() {
+	msg := makeMsg("msg")
+	c := make(chan changeMessageVisibility)
+
+	// assertReceivedIn asserts that we were able to select from channel c
+	// after d +/- delta from now.
+	assertReceivedIn := func(d, delta time.Duration) (changeMessageVisibility, bool) {
+		now := time.Now()
+		begin := d - delta
+		end := d + delta
+		beginExpected := time.NewTimer(begin)
+		select {
+		case v, ok := <-c:
+			t := time.Now()
+			notClosed := suite.True(ok, "Channel c closed.")
+			afterStart := suite.False(
+				beginExpected.Stop(),
+				"Received from channel c before expected (should have been: %s - %s, was: %s).",
+				begin.String(),
+				end.String(),
+				t.Sub(now).String(),
+			)
+			return v, (notClosed && afterStart)
+		case <-time.After(end):
+			return changeMessageVisibility{}, suite.True(
+				false,
+				"Received from channel c after expected (should have been: %s - %s).",
+				begin.String(),
+				end.String(),
+			)
+		}
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	originalDefaultInitialVisibilityTimeout := DefaultInitialVisibilityTimeout
-	originalDefaultMaxVisibilityTimeout := DefaultMaxVisibilityTimeout
-	originalChangeVisBuffer := changeVisBuffer
-	originalVisTimeoutIncrement := visTimeoutIncrement
-	originalDefaultPollTime := DefaultPollTime
-	originalSendVisRandomizationFactor := sendVisRandomizationFactor
-
-	DefaultInitialVisibilityTimeout = 50 * time.Millisecond
-	DefaultMaxVisibilityTimeout = 300 * time.Millisecond
-	changeVisBuffer = 0
-	visTimeoutIncrement = 10 * time.Millisecond
-	DefaultPollTime = 200 * time.Millisecond
-	sendVisRandomizationFactor = 0
-
-	m := &mocks.SQSAPI{}
-	m.Test(t)
-
-	q := New(m, queueURL)
-
-	teardown := func() {
+	wg := sync.WaitGroup{}
+	defer func() {
 		cancel()
-		f2()
-		f1()
-		DefaultInitialVisibilityTimeout = originalDefaultInitialVisibilityTimeout
-		DefaultMaxVisibilityTimeout = originalDefaultMaxVisibilityTimeout
-		changeVisBuffer = originalChangeVisBuffer
-		visTimeoutIncrement = originalVisTimeoutIncrement
-		DefaultPollTime = originalDefaultPollTime
-		sendVisRandomizationFactor = originalSendVisRandomizationFactor
-		_ = logger.Sync()
+		wg.Wait() // Wait for notifyChangeMessageVisibility to stop.
+	}()
+
+	boff := suite.SUT.backoff()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		suite.SUT.notifyChangeMessageVisibility(ctx, *msg.ReceiptHandle, c)
+	}()
+
+	noticeArrivesIn := boff() - testAWSCommBuffer
+	for i := 0; i < 5; i++ {
+		suite.Run("loop-"+strconv.Itoa(i), func() {
+			visibilityTimeout := boff()
+			if notice, ok := assertReceivedIn(noticeArrivesIn, testSecond/10); ok {
+				suite.Equal(*msg.ReceiptHandle, notice.ReceiptHandle)
+				suite.InDelta(visibilityTimeout, notice.NewVisibilityTimeout, float64(testAWSCommBuffer))
+			}
+			noticeArrivesIn = visibilityTimeout - testAWSCommBuffer
+		})
 	}
-	return q, m, ctx, cancel, teardown
 }
 
-func TestSQS_New(t *testing.T) {
-	q, _, _, _, teardown := setup(t)
-	defer teardown()
-	assert.Equal(t, 0, q.MaxConcurrent)
-	assert.Equal(t, DefaultPollTime, q.PollTime)
-	assert.Equal(t, DefaultInitialVisibilityTimeout, q.InitialVisibilityTimeout)
-	assert.Equal(t, DefaultMaxVisibilityTimeout, q.MaxVisibilityTimeout)
-}
-
-func TestSQS_Run(t *testing.T) {
-	q, sqsSvc, ctx, cancel, teardown := setup(t)
-	defer teardown()
-
-	msg1 := makeMsg()
-	msg1Delay := q.InitialVisibilityTimeout + q.InitialVisibilityTimeout/2
-	msg1VisInput := mock.MatchedBy(func(input *sqs.ChangeMessageVisibilityInput) bool {
-		return assert.Equal(t, q.queueURL, *input.QueueUrl) &&
-			assert.Equal(t, *msg1.ReceiptHandle, *input.ReceiptHandle) &&
-			assert.InDelta(t, q.InitialVisibilityTimeout/visTimeoutIncrement, *input.VisibilityTimeout, float64(visTimeoutIncrement))
-	})
-	sqsSvc.On("ChangeMessageVisibilityWithContext", AnyContext, msg1VisInput).Once().Return(&sqs.ChangeMessageVisibilityOutput{}, error(nil))
-	msg1DelInput := &sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(q.queueURL),
-		ReceiptHandle: msg1.ReceiptHandle,
-	}
-	sqsSvc.On("DeleteMessageWithContext", AnyContext, msg1DelInput).Once().Return(&sqs.DeleteMessageOutput{}, error(nil))
-
-	msg2 := makeMsg()
-	msg2DelInput := &sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(q.queueURL),
-		ReceiptHandle: msg2.ReceiptHandle,
-	}
-	sqsSvc.On("DeleteMessageWithContext", AnyContext, msg2DelInput).Once().Return(&sqs.DeleteMessageOutput{}, error(nil))
-
-	expectedReceiveInput := &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(q.queueURL),
-		MaxNumberOfMessages: aws.Int64(maxMessages),
-		VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
-		WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
-	}
-	sqsSvc.On("ReceiveMessageWithContext", AnyContext, expectedReceiveInput).After(q.PollTime/2).Once().Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{msg1, msg2}}, error(nil))
-	// Additional receives return no messages
-	sqsSvc.On("ReceiveMessageWithContext", AnyContext, expectedReceiveInput).After(q.PollTime).Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{}}, error(nil))
-
-	handler := &mocks.Handler{}
-	handler.On("Handle", AnyContext, msg1).After(msg1Delay).Once().Return(error(nil))
-	handler.On("Handle", AnyContext, msg2).Once().Return(error(nil))
-
-	shouldFinishIn := q.PollTime/2 + msg1Delay + 10*time.Millisecond
-	doCancel := time.AfterFunc(shouldFinishIn, cancel)
-	err := q.RunWithContext(ctx, handler)
-
-	assert.False(t, doCancel.Stop(), "stopped before cancel")
-	assert.Equal(t, context.Canceled, err)
-	sqsSvc.AssertExpectations(t)
-	handler.AssertExpectations(t)
-}
-
-func TestSQS_receive_success(t *testing.T) {
-	q, sqsSvc, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-	sqsSvc.On("ReceiveMessageWithContext",
-		ctx,
-		&sqs.ReceiveMessageInput{
-			QueueUrl:            aws.String(q.queueURL),
-			MaxNumberOfMessages: aws.Int64(1),
-			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
-			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
-		},
-	).Return(&sqs.ReceiveMessageOutput{Messages: []*sqs.Message{msg}}, error(nil))
-
-	results := make(chan []*sqs.Message, 1)
-	errc := q.receive(ctx, 1, results)
-	assert.NoError(t, <-errc)
-	close(results)
-	r := <-results
-	if assert.Len(t, r, 1) {
-		assert.Equal(t, msg, r[0])
-	}
-	sqsSvc.AssertExpectations(t)
-}
-
-func TestSQS_receive_failure(t *testing.T) {
-	q, sqsSvc, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	want := errors.New("test error")
-	sqsSvc.On("ReceiveMessageWithContext",
-		ctx,
-		&sqs.ReceiveMessageInput{
-			QueueUrl:            aws.String(q.queueURL),
-			MaxNumberOfMessages: aws.Int64(1),
-			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
-			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
-		},
-	).Return((*sqs.ReceiveMessageOutput)(nil), want)
-	results := make(chan []*sqs.Message, 1)
-	errc := q.receive(ctx, 1, results)
-	assert.Equal(t, <-errc, want)
-	close(results)
-	assert.Zero(t, <-results)
-	sqsSvc.AssertExpectations(t)
-}
-
-// Test context cancel prevents goroutine from blocking
-func TestSQS_receive_ctxCancel(t *testing.T) {
-	q, sqsSvc, ctx, cancel, teardown := setup(t)
-	defer teardown()
-
-	finishIn := q.InitialVisibilityTimeout / 2
-	sqsSvc.On("ReceiveMessageWithContext",
-		AnyContext,
-		&sqs.ReceiveMessageInput{
-			QueueUrl:            aws.String(q.queueURL),
-			MaxNumberOfMessages: aws.Int64(1),
-			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
-			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
-		},
-	).After(finishIn).Return((*sqs.ReceiveMessageOutput)(nil), context.Canceled)
-	results := make(chan []*sqs.Message)
-
-	doCancel := time.AfterFunc(finishIn/2, cancel)
-	err := <-q.receive(ctx, 1, results)
-	assert.False(t, doCancel.Stop(), "stopped before cancel")
-	assert.Equal(t, context.Canceled, err)
-	close(results)
-	assert.Zero(t, <-results)
-	sqsSvc.AssertExpectations(t)
-}
-
-func TestSQS_handle_success(t *testing.T) {
-	q, _, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	m := &mock.Mock{}
-	msg := makeMsg()
-	postpone := make(chan postponeNotification, 1)
-	done := make(chan *sqs.Message, 1)
-
-	handler := &mocks.Handler{}
-	handler.On("Handle", AnyContext, msg).Return(error(nil))
-
-	errc := q.handle(ctx, handler, msg, done, postpone)
-	assert.NoError(t, <-errc)
-	close(postpone)
-	close(done)
-	assert.Zero(t, <-postpone)
-	assert.Equal(t, msg, <-done)
-	m.AssertExpectations(t)
-	handler.AssertExpectations(t)
-}
-func TestSQS_handle_postpone(t *testing.T) {
-	q, _, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-	postpone := make(chan postponeNotification, 1)
-	done := make(chan *sqs.Message, 1)
-
-	finishIn := q.InitialVisibilityTimeout + visTimeoutIncrement
-	handler := &mocks.Handler{}
-	handler.On("Handle", AnyContext, msg).After(finishIn).Return(error(nil))
-
-	now := time.Now()
-	err := <-q.handle(ctx, handler, msg, done, postpone)
-	assert.NoError(t, err)
-
-	assert.NoError(t, err)
-	got := <-postpone
-	if assert.NotZero(t, got) {
-		assert.Equal(t, msg, got.Msg)
-		want := now.Add(2 * q.InitialVisibilityTimeout)
-		delta := time.Duration(float64(q.InitialVisibilityTimeout)*sendVisRandomizationFactor) + time.Millisecond
-		assert.WithinDuration(t, want, got.Time, delta)
-	}
-	assert.Equal(t, msg, <-done)
-	handler.AssertExpectations(t)
-}
-
-func TestSQS_handle_failure(t *testing.T) {
-	q, _, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-	postpone := make(chan postponeNotification, 1)
-	done := make(chan *sqs.Message, 1)
-
-	want := errors.New("test error")
-	handler := &mocks.Handler{}
-	handler.On("Handle", AnyContext, msg).Return(want)
-
-	errc := q.handle(ctx, handler, msg, done, postpone)
-	assert.Equal(t, want, <-errc)
-	close(postpone)
-	assert.Zero(t, <-postpone)
-	close(done)
-	assert.Zero(t, <-done)
-	handler.AssertExpectations(t)
-}
-
-// Test context cancel prevents goroutine from blocking
-func TestSQS_handle_ctxCancel(t *testing.T) {
-	q, _, ctx, cancel, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-	postpone := make(chan postponeNotification)
-	done := make(chan *sqs.Message)
-
-	finishIn := q.InitialVisibilityTimeout / 2
-	handler := &mocks.Handler{}
-	handler.On("Handle", AnyContext, msg).After(finishIn).Return(error(nil))
-
-	doCancel := time.AfterFunc(finishIn/2, cancel)
-	err := <-q.handle(ctx, handler, msg, done, postpone)
-
-	assert.False(t, doCancel.Stop(), "stopped before cancel")
-	assert.Equal(t, context.Canceled, err)
-	close(postpone)
-	assert.Zero(t, <-postpone)
-	close(done)
-	assert.Zero(t, <-done)
-	handler.AssertExpectations(t)
-}
-
-func TestSQS_changeVisibilityTimeout_success(t *testing.T) {
-	q, sqsSvc, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-	d := 17 * time.Second
-
-	sqsSvc.On("ChangeMessageVisibilityWithContext",
-		AnyContext,
-		&sqs.ChangeMessageVisibilityInput{
-			QueueUrl:          aws.String(q.queueURL),
-			ReceiptHandle:     msg.ReceiptHandle,
-			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
-		},
-	).Return(
-		&sqs.ChangeMessageVisibilityOutput{},
-		error(nil),
-	)
-	errc := q.changeVisibilityTimeout(ctx, msg, d)
-	assert.NoError(t, <-errc)
-	sqsSvc.AssertExpectations(t)
-}
-func TestSQS_changeVisibilityTimeout_failure(t *testing.T) {
-	q, sqsSvc, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-	d := 17 * time.Second
-
-	want := errors.New("test error")
-	sqsSvc.On("ChangeMessageVisibilityWithContext",
-		AnyContext,
-		&sqs.ChangeMessageVisibilityInput{
-			QueueUrl:          aws.String(q.queueURL),
-			ReceiptHandle:     msg.ReceiptHandle,
-			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
-		},
-	).Return(
-		(*sqs.ChangeMessageVisibilityOutput)(nil),
-		want,
-	)
-	errc := q.changeVisibilityTimeout(ctx, msg, d)
-	assert.Equal(t, want, <-errc)
-	sqsSvc.AssertExpectations(t)
-}
-
-// Test context cancel prevents goroutine from blocking
-func TestSQS_changeVisibilityTimeout_ctxCancel(t *testing.T) {
-	q, sqsSvc, ctx, cancel, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-	d := 17 * time.Second
-
-	finishIn := q.InitialVisibilityTimeout / 2
-	sqsSvc.On("ChangeMessageVisibilityWithContext",
-		AnyContext,
-		&sqs.ChangeMessageVisibilityInput{
-			QueueUrl:          aws.String(q.queueURL),
-			ReceiptHandle:     msg.ReceiptHandle,
-			VisibilityTimeout: aws.Int64(int64(d / visTimeoutIncrement)),
-		},
-	).After(finishIn).Return((*sqs.ChangeMessageVisibilityOutput)(nil), context.Canceled)
-
-	doCancel := time.AfterFunc(finishIn/2, cancel)
-	err := <-q.changeVisibilityTimeout(ctx, msg, d)
-
-	assert.False(t, doCancel.Stop(), "stopped before cancel")
-	assert.Equal(t, context.Canceled, err)
-	sqsSvc.AssertExpectations(t)
-}
-
-func TestSQS_delete_success(t *testing.T) {
-	q, sqsSvc, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-
-	sqsSvc.On("DeleteMessageWithContext",
-		AnyContext,
-		&sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(q.queueURL),
-			ReceiptHandle: msg.ReceiptHandle,
-		},
-	).Return(
-		&sqs.DeleteMessageOutput{},
-		error(nil),
-	)
-	errc := q.delete(ctx, msg)
-	assert.NoError(t, <-errc)
-	sqsSvc.AssertExpectations(t)
-}
-func TestSQS_delete_failure(t *testing.T) {
-	q, sqsSvc, ctx, _, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-
-	want := errors.New("test error")
-	sqsSvc.On("DeleteMessageWithContext",
-		AnyContext,
-		&sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(q.queueURL),
-			ReceiptHandle: msg.ReceiptHandle,
-		},
-	).Return((*sqs.DeleteMessageOutput)(nil), want)
-	errc := q.delete(ctx, msg)
-	assert.Equal(t, want, <-errc)
-	sqsSvc.AssertExpectations(t)
-}
-
-// Test context cancel prevents goroutine from blocking
-func TestSQS_delete_ctxCancel(t *testing.T) {
-	q, sqsSvc, ctx, cancel, teardown := setup(t)
-	defer teardown()
-
-	msg := makeMsg()
-
-	finishIn := q.InitialVisibilityTimeout / 2
-	sqsSvc.On("DeleteMessageWithContext",
-		AnyContext,
-		&sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(q.queueURL),
-			ReceiptHandle: msg.ReceiptHandle,
-		},
-	).After(finishIn).Return((*sqs.DeleteMessageOutput)(nil), context.Canceled)
-
-	doCancel := time.AfterFunc(finishIn/2, cancel)
-	err := <-q.delete(ctx, msg)
-
-	assert.False(t, doCancel.Stop(), "stopped before cancel")
-	assert.Equal(t, context.Canceled, err)
-	sqsSvc.AssertExpectations(t)
+// TestDispatcher runs the DispatcherTestSuite.
+func TestDispatcher(t *testing.T) {
+	suite.Run(t, new(DispatcherTestSuite))
 }
 
 // AnyContext can be used in mock assertions to test that a context.Context was passed.
-//
-//   // func (*SQSAPI) ReceiveMessageWithContext(context.Context, *sqs.ReceiveMessageInput, ...request.Option) (*sqs.ReceiveMessageOutput, error)
-//   m.On("ReceiveMessageWithContext", awsmock.AnyContext, input, awsmock.NilOpts)
 var AnyContext = mock.MatchedBy(func(ctx context.Context) bool {
 	return true
 })
+
+func minD(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
+}

@@ -3,6 +3,7 @@ package squeues
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff" // Backoff/retry algorithms
@@ -14,10 +15,13 @@ import (
 )
 
 // maxMessages is the max number of message that can be received from SQS at once.
+// This is a limit of the AWS SQS API.
 const maxMessages = 10
 
-var (
-	// DefaultPollTime is default the max seconds to wait for messages.
+var ( // Make these variables, not constants, so they can be changed during tests.
+
+	// DefaultPollTime is default the max duration to wait for messages.
+	// The max allow by the AWS SQS API is 20 seconds.
 	DefaultPollTime = 20 * time.Second
 
 	// DefaultInitialVisibilityTimeout is the default initial message visibility timeout.
@@ -25,63 +29,60 @@ var (
 
 	// DefaultMaxVisibilityTimeout is the default max message visibility timeout.
 	DefaultMaxVisibilityTimeout = 60 * time.Second
-)
 
-var (
-	// SQS message visibility timeout is a multiple of this.
-	visTimeoutIncrement = time.Second
+	// SQS message visibility timeout must be a multiple of this.
+	// This is a limit of the AWS SQS API.
+	second = time.Second
 
-	// changeVisBuffer send request to change SQS message visibiilty timeout
-	// this long before the timeout is actually reached.
-	changeVisBuffer = 2 * time.Second
+	// awsCommBuffer is how long before an SQS message visibiilty times out
+	// that a request should be sent to increase the timeout i.e. if message's visibility
+	// is going to timeout at time t, send a request to update the timeout at t-awsCommBuffer.
+	awsCommBuffer = 2 * time.Second
 
-	// Randomize message visibility timeout by this percent to prevent thundering herds.
+	// sendVisRandomizationFactor is a percent by which message visibility timeouts
+	// will be randomly varied to prevent thundering herds.
 	sendVisRandomizationFactor = 0.05
 )
 
-// Handler is an interface for handling messages received from an SQS queue.
-// It's passed into SQS.Run().
-type Handler interface {
-	Handle(context.Context, *sqs.Message) error
-}
-
-type funcHandler struct {
-	Fn func(context.Context, *sqs.Message) error
-}
-
-func (h *funcHandler) Handle(ctx context.Context, m *sqs.Message) error {
-	return h.Fn(ctx, m)
-}
-
-// FuncHandler returns a simple Handler wrapper around a function.
-func FuncHandler(fn func(context.Context, *sqs.Message) error) Handler {
-	return &funcHandler{
-		Fn: fn,
+// ceilSeconds rounds a duration up to the nearest second.
+func ceilSeconds(d time.Duration) time.Duration {
+	secs := d / second
+	if remainder := d % second; remainder > 0 {
+		secs++
 	}
+	return secs * second
 }
 
-// SQS is a dispatcher for AWS SQS messages, executing a handler for each message received.
-type SQS struct {
+// numSeconds returns the number of seconds in a duration, rounded down.
+func numSeconds(d time.Duration) int64 {
+	return int64(d / second)
+}
+
+// Dispatcher is a dispatcher for AWS SQS messages, executing a Handler for each message received.
+type Dispatcher struct {
 	client   sqsiface.SQSAPI
 	queueURL string
 
-	// Maximum number of concurrent handle funcion calls to
-	// make at once. Zero (the default) is no limit.
+	// Maximum number of concurrent messages to handle.
+	// Zero (the default) is no limit.
 	MaxConcurrent int
 
 	// Max seconds to wait for messages.
+	// Defaults to DefaultPollTime.
 	PollTime time.Duration
 
 	// Initial message visibility timeout.
+	// Defaults to DefaultInitialVisibilityTimeout.
 	InitialVisibilityTimeout time.Duration
 
 	// Max message visibility timeout.
+	// Defaults to DefaultMaxVisibilityTimeout.
 	MaxVisibilityTimeout time.Duration
 }
 
-// New returns a new SQS.
-func New(client sqsiface.SQSAPI, queueURL string) *SQS {
-	return &SQS{
+// New returns a new Dispatcher.
+func New(client sqsiface.SQSAPI, queueURL string) *Dispatcher {
+	return &Dispatcher{
 		client:                   client,
 		queueURL:                 queueURL,
 		PollTime:                 DefaultPollTime,
@@ -92,297 +93,274 @@ func New(client sqsiface.SQSAPI, queueURL string) *SQS {
 
 // Run consumes messages from the SQS queue and calls h.Handle() as a goroutine for each.
 //
-// While h is running, the message will periodically have its visibility timeout updated
-// to keep the message reserved. If h or any communication with AWS returns a error,
-// the context will be canceled and the error returned. If h returns without error,
-// the message will be deleted from SQS.
-func (q *SQS) Run(h Handler) error {
-	return q.RunWithContext(context.Background(), h)
+// While the Handler is running, the message will periodically have its visibility timeout updated
+// to keep the message reserved. If the Handler or any communication with AWS returns a error,
+// the context passed to the Handler will be canceled and the error returned.
+// If the Handler returns without error, the message will be deleted from SQS.
+//
+// Unless there is an error, Run() will block forever. If you need the ability to cancel,
+// use RunWithContext().
+func (q *Dispatcher) Run(handler Handler) error {
+	return q.RunWithContext(context.Background(), handler)
 }
 
 // RunWithContext is the same as Run() but passing a context.
-func (q *SQS) RunWithContext(ctx context.Context, h Handler) error {
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	errc := make(chan error)
-
+func (q *Dispatcher) RunWithContext(ctx context.Context, handler Handler) error {
+	// Create a ticker that will trigger fetching messages from the SQS queue.
 	// Use backoff.Ticker here instead of time.Ticker because time.Ticker drops
-	// ticks if no one is receving on its channel, while backoff.Ticker blocks
-	// until the tick is received. Also backoff.Ticker ticks immediately on instantiation.
-	receiveTicker := backoff.NewTicker(backoff.NewConstantBackOff(q.PollTime))
-	defer receiveTicker.Stop()
-	startReceive := receiveTicker.C // Put the channel in a separate var so we can enable/disable by setting nil
-	receiveResults := make(chan []*sqs.Message)
+	// ticks if nothing is receving on its channel, while backoff.Ticker blocks
+	// until the tick is received. Also backoff.Ticker ticks once immediately on instantiation.
+	doReceiveMessagesTicker := backoff.NewTicker(backoff.NewConstantBackOff(q.PollTime))
+	defer doReceiveMessagesTicker.Stop()
+	doReceiveMessages := doReceiveMessagesTicker.C // Refer to the ticker channel in a separate var so we can enable/disable it.
+	var receiveMessagesResults chan []*sqs.Message // Channel for the results of receiving SQS messages.
 
-	pendingHandle := make(map[string]struct{}) // Keep tracking of number of messages pending handle func.
-	handleResults := make(chan *sqs.Message)
+	// Map to keep track of messages pending Handler completion.
+	// The map keys are set from sqs.Message.ReceiptHandle.
+	// The maps values are a func that will stop the periodic updates to the SQS message visibility.
+	pending := make(map[string]func())
 
-	postponec := make(chan postponeNotification)
-	postponeNotification := make(map[string]func()) // ReceiptHandle => postpone cancel function
+	doUpdateMessageVisibility := make(chan changeMessageVisibility)
+
+	// Channel for messages that were handled successfully and need to be deleted.
+	// The string values are from sqs.Message.ReceiptHandle.
+	doDeleteMessage := make(chan string)
+
+	wg := sync.WaitGroup{} // Keeps track of goroutines to make sure they exit before returning.
+	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
-		for _, cancel := range postponeNotification {
-			cancel()
-		}
+		cancel()  // Cancel when RunWithContext returns (i.e. in case of error), so all running Handlers abort.
+		wg.Wait() // Wait for goroutines to stop.
 	}()
+
+	errc := make(chan error) // Channel for goroutines to report errors to RunWithContext.
+
+	// abortIfErr ends RunWithContext if it receives a non-nil error.
+	// It returns true if err was nil, else false.
+	// When RunWithContext returns ctx will be cancel, causing all
+	// other calls to abortIfErr to noop.
+	abortIfErr := func(err error) bool {
+		if err == nil {
+			return true
+		}
+		select {
+		case errc <- err:
+		case <-ctx.Done():
+		}
+		return false
+	}
 
 	for { // Event loop. Everything within the select cases MUST NOT block.
 		select {
-		case <-ctx.Done(): // Stop on context cancel.
+		case <-ctx.Done(): // Return on context cancel.
 			return ctx.Err()
 
-		case err := <-errc: // Stop on error.
-			if err != context.Canceled { // Ignore context.Canceled from postpone case
-				return err
-			}
+		case err := <-errc: // On error (sent by abortIfErr), return the error.
+			return err
 
-		case <-startReceive: // Start SQS message receive operation.
+		case <-doReceiveMessages: // Start SQS message receive operation.
+
+			// Disable the doReceiveMessages select case until results return.
+			doReceiveMessages = nil
+
+			// Figure out how many SQS messages to request.
 			var n int
-			if q.MaxConcurrent == 0 {
+			if q.MaxConcurrent == 0 { // Unlimited up to the AWS API limit.
 				n = maxMessages
 			} else {
-				n = q.MaxConcurrent - len(pendingHandle)
+				n = q.MaxConcurrent - len(pending)
 			}
 			if n > maxMessages {
 				n = maxMessages
 			}
 			if n <= 0 {
-				panic("tried to receive less than one messages")
+				panic("tried to receive < 1 messages")
 			}
-			go forwardErr(ctx, q.receive(ctx, n, receiveResults), errc)
-			startReceive = nil // Disable start receive case
 
-		case messages := <-receiveResults: // End SQS message receive operation.
-			// Start handler goroutines for each message.
+			// Start a goroutine to call the AWS receive messages API.
+			receiveMessagesResults = make(chan []*sqs.Message, 1)
+			wg.Add(1)
+			go func(n int) {
+				defer wg.Done()
+				if messages, err := q.receiveMessages(ctx, n); abortIfErr(err) {
+					select {
+					case receiveMessagesResults <- messages:
+					case <-ctx.Done(): // Don't block if ctx is canceled.
+					}
+				}
+			}(n)
+
+		case messages := <-receiveMessagesResults: // End SQS message receive operation.
+			receiveMessagesResults = nil
 			for _, m := range messages {
-				pendingHandle[*m.ReceiptHandle] = struct{}{}
-				go forwardErr(ctx, q.handle(ctx, h, m, handleResults, postponec), errc)
+				// Start handler goroutines for each message.
+				wg.Add(1)
+				go func(m *sqs.Message) {
+					defer wg.Done()
+					if err := handler.Handle(ctx, m); abortIfErr(err) {
+						select {
+						case doDeleteMessage <- *m.ReceiptHandle:
+						case <-ctx.Done(): // Don't block if ctx is canceled.
+						}
+					}
+				}(m)
+
+				// Start message visibility updating goroutines.
+				rh := *m.ReceiptHandle
+				notifierCtx, stopNotifier := context.WithCancel(ctx)
+				pending[rh] = stopNotifier
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					q.notifyChangeMessageVisibility(notifierCtx, rh, doUpdateMessageVisibility)
+				}()
 			}
+
 			// If there aren't too many messages pending handle completion,
 			// enable another message receive operation.
-			if q.MaxConcurrent == 0 || len(pendingHandle) < q.MaxConcurrent {
-				startReceive = receiveTicker.C // Enable start receive case
+			if q.MaxConcurrent == 0 || len(pending) < q.MaxConcurrent {
+				doReceiveMessages = doReceiveMessagesTicker.C // Enable start receive case
 			}
 
-		case notice := <-postponec: // Handle func is taking a while. Extend the message visibility timeout.
-			rh := *notice.Msg.ReceiptHandle
-			if _, ok := pendingHandle[rh]; !ok {
-				continue // handle already finished
-			}
-			if cancelPreviousPostpone, ok := postponeNotification[rh]; ok {
-				// Cancel any previous running postpone goroutine.
-				cancelPreviousPostpone()
-			}
-			msgCtx, cancelPostpone := context.WithCancel(ctx)
-			postponeNotification[rh] = cancelPostpone
-			go forwardErr(ctx, q.changeVisibilityTimeout(msgCtx, notice.Msg, time.Until(notice.Time)), errc)
+		case notice := <-doUpdateMessageVisibility:
+			wg.Add(1)
+			go func(notice changeMessageVisibility) {
+				defer wg.Done()
+				abortIfErr(q.updateMessageVisibility(ctx, notice.ReceiptHandle, notice.NewVisibilityTimeout))
+			}(notice)
 
-		case m := <-handleResults: // Delete message when done.
-			go forwardErr(ctx, q.delete(ctx, m), errc)
-			rh := *m.ReceiptHandle
-			delete(pendingHandle, rh)
-			if cancelPreviousPostpone, ok := postponeNotification[rh]; ok {
-				// Cancel any previous running postpone goroutine.
-				cancelPreviousPostpone()
-				delete(postponeNotification, rh)
+		case receiptHandle := <-doDeleteMessage: // Delete message when handler completes successfully.
+			// Stop the periodic updates to message visibility.
+			stopMsgVisibilityUpdates, ok := pending[receiptHandle]
+			if !ok {
+				panic("trying to delete SQS message that isn't pending")
 			}
-			if q.MaxConcurrent == 0 || len(pendingHandle) < q.MaxConcurrent {
-				startReceive = receiveTicker.C // Enable start receive case
+			stopMsgVisibilityUpdates()
+			delete(pending, receiptHandle)
+
+			// If there isn't already a pending message receive operation
+			// and there aren't too many messages pending handler completion,
+			// enable another message receive operation.
+			if receiveMessagesResults == nil && (q.MaxConcurrent == 0 || len(pending) < q.MaxConcurrent) {
+				doReceiveMessages = doReceiveMessagesTicker.C // Enable start receive case
 			}
+
+			// Start a goroutine to delete the message from SQS.
+			wg.Add(1)
+			go func(rh string) {
+				defer wg.Done()
+				abortIfErr(q.deleteMessage(ctx, rh))
+			}(receiptHandle)
 		}
 	}
 }
 
-// receive fetches upto n (allowed values 1 to 10) messages from the AWS SQS queue in a goroutine
-// and sends a list of messages to the results chan. The list might be empty if
-// q.PollTime is exceeded.
-func (q *SQS) receive(ctx context.Context, n int, results chan<- []*sqs.Message) <-chan error {
-	errc := make(chan error, 1)
-	go func() {
-		defer close(errc)
-		resp, err := q.client.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
-			QueueUrl:            aws.String(q.queueURL),
-			MaxNumberOfMessages: aws.Int64(int64(n)),
-			VisibilityTimeout:   aws.Int64(int64(q.InitialVisibilityTimeout / visTimeoutIncrement)),
-			WaitTimeSeconds:     aws.Int64(int64(q.PollTime / visTimeoutIncrement)),
-		})
-		if err != nil {
-			errc <- err
-			return
-		}
-		select {
-		case <-ctx.Done(): // Don't block if context is canceled.
-			errc <- ctx.Err()
-		case results <- resp.Messages:
-		}
-	}()
-	return errc
-}
-
-// handle calls handleF on the given m as a goroutine, and sends either the resulting error to errc or m to done.
-// If handleF takes time, messages will be sent to the postpone chan indicating that the SQS message visibility
-// timeout should be updated.
-func (q *SQS) handle(ctx context.Context, h Handler, m *sqs.Message, done chan<- *sqs.Message, postpone chan<- postponeNotification) <-chan error {
-	errc := make(chan error, 1)
-	go func() {
-		defer close(errc)
-
-		result := make(chan error, 1)
-		go func() {
-			result <- h.Handle(ctx, m)
-		}()
-
-		// Increase message visibility timeout in exponentially increasing amounts.
-		b := &backoff.ExponentialBackOff{
-			InitialInterval:     q.InitialVisibilityTimeout,
-			RandomizationFactor: sendVisRandomizationFactor,
-			Multiplier:          backoff.DefaultMultiplier,
-			MaxInterval:         q.MaxVisibilityTimeout,
-			MaxElapsedTime:      0,
-			Clock:               backoff.SystemClock,
-		}
-		b.Reset()
-		d := q.InitialVisibilityTimeout.Truncate(visTimeoutIncrement)
-
-		var localPostpone chan<- postponeNotification
-		var postponeMsg postponeNotification
-		var err error
-		var localErrc chan<- error
-		startPostpone := time.After(d - changeVisBuffer)
-		var localDone chan<- *sqs.Message
-
-		for { // Event loop. Everything within the select cases MUST NOT block.
-			select {
-			case localDone <- m: // Finished successfully
-				return
-			case localErrc <- err: // Finished with error
-				return
-			case localPostpone <- postponeMsg: // Send the postpone message
-				localPostpone = nil // Disable postpone send case
-			case <-ctx.Done():
-				err = ctx.Err()     // Set error return value
-				localErrc = errc    // Enable error send case
-				startPostpone = nil // Disable start postpone case
-				localPostpone = nil // Disable send postpone case
-			case err = <-result:
-				if err != nil {
-					localErrc = errc    // Enable error send case
-					startPostpone = nil // Disable start postpone case
-					localPostpone = nil // Disable send postpone case
-				} else {
-					localDone = done // Enable finished successfully
-				}
-			case t := <-startPostpone: // Schedule sending a postpone message
-				// Enable send postpone message
-				d = b.NextBackOff().Truncate(visTimeoutIncrement)
-				postponeMsg = postponeNotification{
-					Msg:  m,
-					Time: t.Add(d + changeVisBuffer),
-				}
-				localPostpone = postpone
-
-				// Schedule the next postpone
-				startPostpone = time.After(d)
-			}
-		}
-	}()
-	return errc
-}
-
-// changeVisibilityTimeout changes the message visibility timeout in a goroutine to d (rounded
-// up to the nearest visTimeoutIncrement).
-func (q *SQS) changeVisibilityTimeout(ctx context.Context, m *sqs.Message, d time.Duration) <-chan error {
-	if d < 0 {
-		d = 0
+// receiveMessages receives up to numMessages from the AWS SQS queue.
+func (q *Dispatcher) receiveMessages(ctx context.Context, numMessages int) ([]*sqs.Message, error) {
+	resp, err := q.client.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+		QueueUrl:            aws.String(q.queueURL),
+		MaxNumberOfMessages: aws.Int64(int64(numMessages)),
+		VisibilityTimeout:   aws.Int64(numSeconds(ceilSeconds(q.InitialVisibilityTimeout))),
+		WaitTimeSeconds:     aws.Int64(numSeconds(q.PollTime)),
+	})
+	if err != nil {
+		return nil, err
 	}
-	errc := make(chan error, 1)
-	go func() {
-		defer close(errc)
-		_, err := q.client.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
-			QueueUrl:          aws.String(q.queueURL),
-			ReceiptHandle:     m.ReceiptHandle,
-			VisibilityTimeout: aws.Int64(int64((d + d%visTimeoutIncrement) / visTimeoutIncrement)),
-		})
-		if err != nil {
-			errc <- err
-		}
-	}()
-	return errc
+	return resp.Messages, nil
 }
 
-// delete deletes the given message in a goroutine.
-func (q *SQS) delete(ctx context.Context, m *sqs.Message) <-chan error {
-	errc := make(chan error, 1)
-	go func() {
-		defer close(errc)
-		_, err := q.client.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(q.queueURL),
-			ReceiptHandle: m.ReceiptHandle,
-		})
-		if err != nil {
-			errc <- err
-		}
-	}()
-	return errc
+func (q *Dispatcher) deleteMessage(ctx context.Context, receiptHandle string) error {
+	_, err := q.client.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(q.queueURL),
+		ReceiptHandle: aws.String(receiptHandle),
+	})
+	return err
 }
 
-type postponeNotification struct {
-	Msg  *sqs.Message // Change the visibility timeout of this message to....
-	Time time.Time    // this time.
+// updateMessageVisibility updates the message visibility timeout for
+// the AWS SQS message specified by receiptHandle to d (rounded up to the nearest second).
+func (q *Dispatcher) updateMessageVisibility(ctx context.Context, receiptHandle string, d time.Duration) error {
+	visibilityTimeout := numSeconds(ceilSeconds(d))
+	_, err := q.client.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
+		QueueUrl:          aws.String(q.queueURL),
+		ReceiptHandle:     aws.String(receiptHandle),
+		VisibilityTimeout: aws.Int64(visibilityTimeout),
+	})
+	return err
 }
 
-// forwardErr selects errors from one channel and sends them to another.
-// context.Canceled errors will be filtered out.
-// It continues until the input channel closes or the context is canceled.
-// If the context is canceled, it will keep trying to forward errors until one
-// of the channels blocks, then exit.
-func forwardErr(ctx context.Context, in <-chan error, out chan<- error) {
-	var err error
-	var ok bool
-	localIn := in
-	var localOut chan<- error
-OuterLoop:
-	for { // Event loop. Everything within the select cases MUST NOT block.
+// notifyChangeMessageVisibility periodically sends notices over channel c that the visibility timeout
+// of the SQS message identified by receiptHandle is about to expire and needs to be updated.
+// It will keep sending notifications until ctx is canceled.
+// If the notice isn't received in a timely fashion, notifyChangeMessageVisibility will panic.
+func (q *Dispatcher) notifyChangeMessageVisibility(ctx context.Context, receiptHandle string, c chan<- changeMessageVisibility) {
+	boff := q.backoff()
+	visibilityTimeout := boff()
 
-		// Prioritization hack: do this non-blocking select first. If one of cases succeeds immediately,
-		// great, continue trying to forward errors. If any case blocks, go to the second select, where
-		// we'll exit if the context has been canceled.
+	// Send the notice awsCommBuffer before the next timeout to give
+	// Dispatcher time to request AWS update the visibility timeout.
+	doSendNotice := time.NewTimer(visibilityTimeout - awsCommBuffer)
+	defer doSendNotice.Stop()
+
+	for {
 		select {
-		case err, ok = <-localIn:
-			if !ok {
-				return
-			}
-			if err == context.Canceled {
-				err = nil
-			} else if err != nil {
-				localIn = nil  // Disable input case
-				localOut = out // Enable output case
-			}
-			continue OuterLoop
-		case localOut <- err:
-			localIn = in   // Enable input case
-			localOut = nil // Disable output case
-			continue OuterLoop
-		default:
-		}
-
-		select {
-		case err, ok = <-localIn:
-			if !ok {
-				return
-			}
-			if err == context.Canceled {
-				err = nil
-			} else if err != nil {
-				localIn = nil  // Disable input case
-				localOut = out // Enable output case
-			}
-		case localOut <- err:
-			localIn = in   // Enable input case
-			localOut = nil // Disable output case
 		case <-ctx.Done():
 			return
+		case <-doSendNotice.C:
+			visibilityTimeout = boff()
+			notice := changeMessageVisibility{receiptHandle, visibilityTimeout}
+
+			select {
+			case c <- notice: // Send the notice.
+			case <-ctx.Done(): // Abort if context is canceled.
+				return
+			case <-time.After(awsCommBuffer):
+				// Notice wasn't received promptly.
+				// By now the SQS message visibiilty timeout will have expired.
+				// If we request that AWS update the message visibility now, it will error.
+				// This shouldn't happen.
+				panic("change message visibility notification wasn't received in time")
+			}
+
+			doSendNotice.Reset(visibilityTimeout - awsCommBuffer)
 		}
 	}
+}
+
+// backoff returns function that generates increasing visibility timeout durations
+// for SQS messages. The first duration will == q.InitialVisibilityTimeout and
+// increase exponentially from there to q.MaxVisibilityTimeout.
+func (q *Dispatcher) backoff() func() time.Duration {
+	// Message visibility timeout should be increased exponentially
+	// the longer we hold on to it.
+	boff := &backoff.ExponentialBackOff{
+		InitialInterval:     q.InitialVisibilityTimeout,
+		MaxInterval:         q.MaxVisibilityTimeout,
+		RandomizationFactor: sendVisRandomizationFactor,
+		Multiplier:          backoff.DefaultMultiplier,
+		MaxElapsedTime:      0,
+		Clock:               backoff.SystemClock,
+	}
+	boff.Reset()
+
+	// Skip the first backoff interval.
+	// This will == q.InitialVisibilityTimeout +/- some random amount.
+	// The first message timeout was set to exactly q.InitialVisibilityTimeout when
+	// we called the ReceiveMessages API, so we want the timeout _after_ that.
+	_ = boff.NextBackOff()
+
+	next := q.InitialVisibilityTimeout
+	return func() time.Duration {
+		defer func() {
+			next = boff.NextBackOff()
+		}()
+		return next
+	}
+}
+
+// changeMessageVisibility notifies a running SQS that a message is about to
+// reach its visibility timeout and needs to have that timeout updated.
+type changeMessageVisibility struct {
+	ReceiptHandle        string        // The message identified by this receipt handle...
+	NewVisibilityTimeout time.Duration // should have its visibility timeout updated to this.
 }
