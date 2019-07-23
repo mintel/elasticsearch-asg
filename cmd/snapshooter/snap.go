@@ -21,7 +21,7 @@ func NewSnapshotWindow(every, keepFor string) (SnapshotWindow, error) {
 
 	d, err := ptime.ParseISO8601D(every)
 	if err != nil {
-		return SnapshotWindow{}, err
+		return sw, err
 	}
 	sw.Every = d
 
