@@ -27,7 +27,7 @@ const (
 
 const iso8601Group = `(?:(?P<%s>-?\d+(?:[,.]\d+)?)%s)?`
 
-var iso8601Duation = regexp.MustCompile(fmt.Sprintf(`^P(?:0|%s|%s)$`,
+var iso8601Duration = regexp.MustCompile(fmt.Sprintf(`^P(?:0|%s|%s)$`,
 	fmt.Sprintf(iso8601Group, "weeks", "W"),
 	fmt.Sprintf(`%s%s%s(?:T%s%s%s)?`,
 		fmt.Sprintf(iso8601Group, "years", "Y"),
@@ -59,11 +59,11 @@ func ParseISO8601D(duration string) (time.Duration, error) {
 		return 0, nil
 	}
 
-	matches := iso8601Duation.FindStringSubmatch(duration)
+	matches := iso8601Duration.FindStringSubmatch(duration)
 	if matches == nil {
 		return 0, fmt.Errorf("cannot parse Period string")
 	}
-	groupNames := iso8601Duation.SubexpNames()
+	groupNames := iso8601Duration.SubexpNames()
 	var d time.Duration
 	for i := 1; i < len(groupNames); i++ {
 		group, match := groupNames[i], matches[i]
