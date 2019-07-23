@@ -36,7 +36,7 @@ Flags:
                                 format. Example: `--window P1M=PT1H` ==
                                 keep hourly snapshots for 1 month.
   -d, --delete                  If set, clean up old snapshots. This is
-                                false be default for safety's sake.
+                                false by default for safety's sake.
       --repo="backups"          Name of the snapshot repository.
       --type=TYPE               If set, create a repository of this type
                                 before creating snapshots. See also:
