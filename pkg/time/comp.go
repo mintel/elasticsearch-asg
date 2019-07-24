@@ -2,7 +2,10 @@ package time
 
 import "time"
 
-// Between returns true if t is between start and end inclusive.
-func Between(t, start, end time.Time) bool {
-	return (start.Equal(t) || start.Before(t)) && (end.Equal(t) || end.After(t))
+// Between returns true if t is between a and b inclusive.
+func Between(t, a, b time.Time) bool {
+	if b.Before(a) {
+		a, b = b, a
+	}
+	return (a.Equal(t) || a.Before(t)) && (b.Equal(t) || b.After(t))
 }
