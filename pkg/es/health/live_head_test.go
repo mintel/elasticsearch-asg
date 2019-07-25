@@ -12,6 +12,7 @@ func TestCheckLiveHEAD_passing(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 	check := CheckLiveHEAD(u)
 	gock.New(u).
 		Head("/").
@@ -25,6 +26,7 @@ func TestCheckLiveHEAD_error(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 	check := CheckLiveHEAD(u)
 	gock.New(u).
 		Head("/").

@@ -13,6 +13,7 @@ func TestCheckReadyJoinedCluster_passing(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 	check := CheckReadyJoinedCluster(u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").
@@ -31,6 +32,7 @@ func TestCheckReadyJoinedCluster_error(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 	check := CheckReadyJoinedCluster(u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").
@@ -45,6 +47,7 @@ func TestCheckReadyJoinedCluster_not_joined(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
 	check := CheckReadyJoinedCluster(u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").
