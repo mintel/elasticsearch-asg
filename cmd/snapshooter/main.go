@@ -11,13 +11,6 @@ import (
 	"github.com/mintel/elasticsearch-asg/cmd" // Common logging setup func
 )
 
-const (
-	// Initial Elasticsearch exponential backoff retry time.
-	esRetryInit = 150 * time.Millisecond
-	// Max Elasticsearch exponential backoff retry time.
-	esRetryMax = 1200 * time.Millisecond
-)
-
 // SnapshotFormat is the format for snapshot names (time.Time.Format()).
 // Elasticsearch snapshot names may not contain spaces.
 const SnapshotFormat = "2006-01-02-15-04-05"
@@ -74,11 +67,7 @@ func main() {
 	ctx := context.Background()
 
 	// Craete Elasticsearch client.
-	client, err := elastic.DialContext(
-		ctx,
-		elastic.SetURL((*esURL).String()),
-		elastic.SetRetrier(elastic.NewBackoffRetrier(elastic.NewExponentialBackoff(esRetryInit, esRetryMax))),
-	)
+	client, err := elastic.DialContext(ctx, elastic.SetURL((*esURL).String()))
 	if err != nil {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
