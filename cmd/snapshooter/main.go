@@ -28,12 +28,8 @@ const defaultURL = "http://localhost:9200"
 
 // Command line opts
 var (
-	esURL   = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
-	windows = kingpin.Flag("window", "Snapshot frequency + TTL. May be set multiple times. ISO 8601 Duration string format. Example: `--window P1M=PT1H` == keep hourly snapshots for 1 month.").Default(
-		"P1M=PT1H",
-		"P3M=P1W",
-		"P3Y=P1M",
-	).StringMap()
+	esURL        = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
+	windows      = kingpin.Flag("window", "Snapshot frequency + TTL. May be set multiple times. ISO 8601 Duration string format. Example: `--window P1M=PT1H` == keep hourly snapshots for 1 month.").PlaceHolder("P1M=PT1H").Required().StringMap()
 	delete       = kingpin.Flag("delete", "If set, clean up old snapshots. This is false by default for safety's sake.").Short('d').Bool()
 	repoName     = kingpin.Flag("repo", "Name of the snapshot repository.").Default("backups").String()
 	repoType     = kingpin.Flag("type", "If set, create a repository of this type before creating snapshots. See also: '--settings'").String()
