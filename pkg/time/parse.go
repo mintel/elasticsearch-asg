@@ -22,7 +22,19 @@ const (
 	// Year duration
 	Year = (time.Duration(365.2425*float64(Day)) / time.Second) * time.Second // truncate to second
 
-	iso8601Group        = `(?:(?P<%s>-?\d+(?:[,.]\d+)?)%s)?`
+	// ISO 8601 Duration string parts
+	iso8601Weeks   = "W"
+	iso8601Years   = "Y"
+	iso8601Months  = "M"
+	iso8601Days    = "D"
+	iso8601Hours   = "H"
+	iso8601Minutes = "M"
+	iso8601Seconds = "S"
+
+	// ISO 8601 duration string part regexp pattern
+	iso8601Group = `(?:(?P<%s>-?\d+(?:[,.]\d+)?)%s)?`
+
+	// ISO 8601 duration string regexp group names
 	iso8601GroupWeeks   = "W"
 	iso8601GroupYears   = "Y"
 	iso8601GroupMonths  = "m"
@@ -33,14 +45,14 @@ const (
 )
 
 var iso8601Duration = regexp.MustCompile(fmt.Sprintf(`^P(?:0|%s|%s)$`,
-	fmt.Sprintf(iso8601Group, iso8601GroupWeeks, "W"),
+	fmt.Sprintf(iso8601Group, iso8601GroupWeeks, iso8601Weeks),
 	fmt.Sprintf(`%s%s%s(?:T%s%s%s)?`,
-		fmt.Sprintf(iso8601Group, iso8601GroupYears, "Y"),
-		fmt.Sprintf(iso8601Group, iso8601GroupMonths, "M"),
-		fmt.Sprintf(iso8601Group, iso8601GroupDays, "D"),
-		fmt.Sprintf(iso8601Group, iso8601GroupHours, "H"),
-		fmt.Sprintf(iso8601Group, iso8601GroupMinutes, "M"),
-		fmt.Sprintf(iso8601Group, iso8601GroupSeconds, "S"),
+		fmt.Sprintf(iso8601Group, iso8601GroupYears, iso8601Years),
+		fmt.Sprintf(iso8601Group, iso8601GroupMonths, iso8601Months),
+		fmt.Sprintf(iso8601Group, iso8601GroupDays, iso8601Days),
+		fmt.Sprintf(iso8601Group, iso8601GroupHours, iso8601Hours),
+		fmt.Sprintf(iso8601Group, iso8601GroupMinutes, iso8601Minutes),
+		fmt.Sprintf(iso8601Group, iso8601GroupSeconds, iso8601Seconds),
 	),
 ))
 
