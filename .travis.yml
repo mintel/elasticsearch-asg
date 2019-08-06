@@ -4,23 +4,17 @@ services:
   - docker
 
 matrix:
-  include:
-    - go: "1.11.x"
-      cache:
-        directories:
-          - $HOME/.cache/go-build
-          - $HOME/gopath/pkg/mod
-    - go: "1.12.x"
-      cache:
-        directories:
-          - $HOME/.cache/go-build
-          - $HOME/gopath/pkg/mod
   allow_failures:
   - go: tip
 
 env:
   - GO111MODULE=on
   - GO111MODULE=off
+
+cache:
+  directories:
+    - $HOME/.cache/go-build
+    - $HOME/gopath/pkg/mod
 
 addons:
   apt:
