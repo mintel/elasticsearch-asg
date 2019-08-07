@@ -31,7 +31,7 @@ Flags:
       --help                    Show context-sensitive help (also try
                                 --help-long and --help-man).
   -v, --verbose                 Show debug logging.
-      --window=P1M=PT1H... ...  Snapshot frequency + TTL. May be set
+      --window=P1M=PT1H ...     Snapshot frequency + TTL. May be set
                                 multiple times. ISO 8601 Duration string
                                 format. Example: `--window P1M=PT1H` ==
                                 keep hourly snapshots for 1 month.
