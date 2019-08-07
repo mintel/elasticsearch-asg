@@ -16,7 +16,7 @@ The Autoscaling Group won't scale up/down again until the Lifecycle Hook event f
 
 Lifecycler consumes Lifecycle Hook events from an SQS queue, and:
 
-1. If the instance is terminating, drains shards from the node and excludes if from master voting.
+1. If the instance is terminating, drains shards from the node and excludes it from master voting.
 2. Delay the Lifecycle Hook event from timing out until the cluster reaches a green state.
 
 This prevents the Autoscaling Group from getting into a feedback loop.
