@@ -1,6 +1,7 @@
 package time
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ func TestParseISO8601D(t *testing.T) {
 		desc string
 		in   string
 		want time.Duration
+		err  error
 	}{
 		{
 			desc: "zero",
@@ -55,16 +57,27 @@ func TestParseISO8601D(t *testing.T) {
 		},
 		{
 			desc: "complex",
-			in:   "P10Y5M3DT14H12M8S",
-			want: 10*Year + 5*Month + 3*Day + 14*time.Hour + 12*time.Minute + 8*time.Second,
+			in:   "P10Y5M-3DT14H12M8S",
+			want: 10*Year + 5*Month - 3*Day + 14*time.Hour + 12*time.Minute + 8*time.Second,
+		},
+		{
+			desc: "overflow-positive",
+			in:   "P292Y3M9DT20H53M35S",
+			want: time.Duration(math.MaxInt64),
+			err:  ErrInt64Overflow,
+		},
+		{
+			desc: "overflow-negative",
+			in:   "P-292Y-3M-9DT-20H-53M-35S",
+			want: time.Duration(math.MinInt64),
+			err:  ErrInt64Overflow,
 		},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
 			got, err := ParseISO8601D(tC.in)
-			if assert.NoError(t, err) {
-				assert.Equal(t, tC.want, got)
-			}
+			assert.Equal(t, tC.err, err)
+			assert.Equal(t, tC.want, got)
 		})
 	}
 }

@@ -1,14 +1,12 @@
 package time
 
 import (
+	"errors"
 	"fmt"
-	"math"
+	"math/big"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/JohnCGriffin/overflow" // Detect int/float overflow problems
 )
 
 const (
@@ -23,25 +21,47 @@ const (
 
 	// Year duration
 	Year = (time.Duration(365.2425*float64(Day)) / time.Second) * time.Second // truncate to second
+
+	// ISO 8601 Duration string parts
+	iso8601Weeks   = "W"
+	iso8601Years   = "Y"
+	iso8601Months  = "M"
+	iso8601Days    = "D"
+	iso8601Hours   = "H"
+	iso8601Minutes = "M"
+	iso8601Seconds = "S"
+
+	// ISO 8601 duration string part regexp pattern
+	iso8601Group = `(?:(?P<%s>-?\d+(?:[,.]\d+)?)%s)?`
+
+	// ISO 8601 duration string regexp group names
+	iso8601GroupWeeks   = "W"
+	iso8601GroupYears   = "Y"
+	iso8601GroupMonths  = "m"
+	iso8601GroupDays    = "d"
+	iso8601GroupHours   = "H"
+	iso8601GroupMinutes = "M"
+	iso8601GroupSeconds = "S"
 )
 
-const iso8601Group = `(?:(?P<%s>-?\d+(?:[,.]\d+)?)%s)?`
-
 var iso8601Duration = regexp.MustCompile(fmt.Sprintf(`^P(?:0|%s|%s)$`,
-	fmt.Sprintf(iso8601Group, "weeks", "W"),
+	fmt.Sprintf(iso8601Group, iso8601GroupWeeks, iso8601Weeks),
 	fmt.Sprintf(`%s%s%s(?:T%s%s%s)?`,
-		fmt.Sprintf(iso8601Group, "years", "Y"),
-		fmt.Sprintf(iso8601Group, "months", "M"),
-		fmt.Sprintf(iso8601Group, "days", "D"),
-		fmt.Sprintf(iso8601Group, "hours", "H"),
-		fmt.Sprintf(iso8601Group, "minutes", "M"),
-		fmt.Sprintf(iso8601Group, "seconds", "S"),
+		fmt.Sprintf(iso8601Group, iso8601GroupYears, iso8601Years),
+		fmt.Sprintf(iso8601Group, iso8601GroupMonths, iso8601Months),
+		fmt.Sprintf(iso8601Group, iso8601GroupDays, iso8601Days),
+		fmt.Sprintf(iso8601Group, iso8601GroupHours, iso8601Hours),
+		fmt.Sprintf(iso8601Group, iso8601GroupMinutes, iso8601Minutes),
+		fmt.Sprintf(iso8601Group, iso8601GroupSeconds, iso8601Seconds),
 	),
 ))
 
+// ErrInt64Overflow is returned by ParseISO8601D if the duration can't fit in an int64.
+var ErrInt64Overflow = errors.New("int64 overflow")
+
 // ParseISO8601D parses an ISO 8601 duration string.
 // Errors are returned if the string can't be parsed or the duration
-// overflows int64.
+// overflows an int64.
 //
 // The following time assumptions are used:
 // - Days are 24 hours.
@@ -52,52 +72,61 @@ var iso8601Duration = regexp.MustCompile(fmt.Sprintf(`^P(?:0|%s|%s)$`,
 // See: https://en.wikipedia.org/wiki/ISO_8601#Durations
 func ParseISO8601D(duration string) (time.Duration, error) {
 	if duration == "" {
-		return 0, fmt.Errorf("cannot parse a blank string as a period")
+		return 0, fmt.Errorf("cannot parse a blank string as a duration")
 	}
-
 	if duration == "P0" {
 		return 0, nil
 	}
-
 	matches := iso8601Duration.FindStringSubmatch(duration)
 	if matches == nil {
-		return 0, fmt.Errorf("cannot parse Period string")
+		return 0, fmt.Errorf("cannot parse duration string")
 	}
 	groupNames := iso8601Duration.SubexpNames()
-	var d time.Duration
+	const precision = 128 // Arbitrary number bigger than an int64
+	sum := new(big.Float).SetPrec(precision)
 	for i := 1; i < len(groupNames); i++ {
 		group, match := groupNames[i], matches[i]
 		if match == "" {
 			continue
 		}
-		n, err := strconv.ParseFloat(strings.Replace(match, ",", ".", 1), 64)
+		n, _, err := big.ParseFloat(
+			strings.Replace(match, ",", ".", 1), // Convert comma decimal separator to period.
+			10,
+			precision,
+			big.ToZero,
+		)
 		if err != nil {
 			return 0, fmt.Errorf("failed to parse %s value '%s': %v", group, match, err)
 		}
-		var r time.Duration
-		var ok bool
+		var d time.Duration
 		switch group {
-		case "weeks":
-			r, ok = addDurationMul(d, n, Week)
-		case "years":
-			r, ok = addDurationMul(d, n, Year)
-		case "months":
-			r, ok = addDurationMul(d, n, Month)
-		case "days":
-			r, ok = addDurationMul(d, n, Day)
-		case "hours":
-			r, ok = addDurationMul(d, n, time.Hour)
-		case "minutes":
-			r, ok = addDurationMul(d, n, time.Minute)
-		case "seconds":
-			r, ok = addDurationMul(d, n, time.Second)
+		case iso8601GroupWeeks:
+			d = Week
+		case iso8601GroupYears:
+			d = Year
+		case iso8601GroupMonths:
+			d = Month
+		case iso8601GroupDays:
+			d = Day
+		case iso8601GroupHours:
+			d = time.Hour
+		case iso8601GroupMinutes:
+			d = time.Minute
+		case iso8601GroupSeconds:
+			d = time.Second
 		}
-		if !ok {
-			return r, fmt.Errorf("int64 overflow")
-		}
-		d = r
+		bigD := new(big.Float).SetInt64(int64(d))
+		n = n.Mul(n, bigD)
+		sum = sum.Add(sum, n)
 	}
-	return d, nil
+	switch i, a := sum.Int64(); a {
+	case big.Below, big.Above:
+		return time.Duration(i), ErrInt64Overflow
+	case big.Exact:
+		return time.Duration(i), nil
+	default:
+		panic("unknown accuracy: " + a.String())
+	}
 }
 
 // MustParseISO8601D is like ParseISO8601D, but panics if there's an error.
@@ -107,16 +136,4 @@ func MustParseISO8601D(duration string) time.Duration {
 		panic(err)
 	}
 	return d
-}
-
-// addDurationMul returns d + (n * u), and a bool indicating there was no int64 overflow/underflow.
-func addDurationMul(d time.Duration, n float64, u time.Duration) (time.Duration, bool) {
-	r := n * float64(u)
-	if r > float64(math.MaxInt64) {
-		return time.Duration(math.MaxInt64), false
-	} else if r < float64(math.MinInt64) {
-		return time.Duration(math.MinInt64), false
-	}
-	i, ok := overflow.Add64(int64(d), int64(r))
-	return time.Duration(i), ok
 }
