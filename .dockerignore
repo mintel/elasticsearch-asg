@@ -17,7 +17,12 @@
 *.out
 
 ### Go Patch ###
-/vendor/
 /Godeps/
 
 # End of https://www.gitignore.io/api/go
+
+/snapshooter
+/cloudwatcher
+/drainer
+/throttler
+/healthchecker

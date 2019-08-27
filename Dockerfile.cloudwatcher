@@ -2,7 +2,7 @@
 # STAGE 1 test and build binary
 ###############################
 
-FROM golang:1.12 AS builder
+FROM golang:1.13 AS builder
 
 # Set Go build env vars
 ARG GOOS=linux

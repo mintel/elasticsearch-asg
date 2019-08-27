@@ -8,6 +8,7 @@ A number of little tools I needed setting up Elasticsearch as AWS Autoscaling Gr
 These target Elasticsearch >= 7.0.
 
 - [cloudwatcher](cmd/cloudwatcher) - Push metrics about Elasticsearch cluster to AWS CloudWatch, mainly for autoscaling.
-- [healthcheck](cmd/healthcheck) - Provide health and readiness checks for Elasticsearch.
-- [lifecycler](cmd/lifecycler) - Regulate AWS Autoscaling of Elasticsearch by delaying new autoscaling actions until cluster is stable.
+- [healthchecker](cmd/healthchecker) - Provide health and readiness checks for Elasticsearch.
+- [drainer](cmd/drainer) - Move shards off of Elasticsearch nodes that are about to be terminated.
+- [throttler](cmd/throttler) - Regulate AWS Autoscaling of Elasticsearch by delaying new autoscaling actions until cluster is stable.
 - [snapshooter](cmd/snapshooter) - Take snapshots of Elasticsearch cluster on a schedule, and clean up old ones.

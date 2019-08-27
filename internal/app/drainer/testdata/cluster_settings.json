@@ -1,0 +1,14 @@
+{
+    "persistent": {},
+    "transient": {
+        "cluster": {
+            "routing": {
+                "allocation": {
+                    "exclude": {
+                        "_name": "i-0adf68017a253c05d"
+                    }
+                }
+            }
+        }
+    }
+}
