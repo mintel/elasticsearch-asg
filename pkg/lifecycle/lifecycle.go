@@ -20,7 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 
-	"github.com/mintel/elasticsearch-asg/pkg/metrics"
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"  // Logger from context
+	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Promtheus metrics
 )
 
 var (
@@ -136,6 +137,7 @@ type Event struct {
 
 // NewEventFromMsg creates a new event from a lifecycle message.
 func NewEventFromMsg(ctx context.Context, client autoscalingiface.AutoScalingAPI, data []byte) (*Event, error) {
+	logger := ctxlog.L(ctx)
 	e := new(Event)
 	if err := json.Unmarshal(data, e); err != nil {
 		return nil, err
@@ -149,14 +151,17 @@ func NewEventFromMsg(ctx context.Context, client autoscalingiface.AutoScalingAPI
 	if !(e.LifecycleTransition == TransitionTerminating || e.LifecycleTransition == TransitionLaunching) {
 		return nil, ErrUnknownTransition
 	}
-
+	logger = logger.With(zap.String("asg_name", e.AutoScalingGroupName), zap.String("name", e.LifecycleHookName))
+	logger.Debug("describing lifecycle hook")
 	resp, err := client.DescribeLifecycleHooksWithContext(ctx, &autoscaling.DescribeLifecycleHooksInput{
 		AutoScalingGroupName: aws.String(e.AutoScalingGroupName),
 		LifecycleHookNames:   []*string{aws.String(e.LifecycleHookName)},
 	})
 	if err != nil {
+		logger.Error("error describing lifecycle hook", zap.Error(err))
 		return nil, err
 	}
+	logger.Debug("described lifecycle hook")
 	e.HeartbeatTimeout = time.Duration(*resp.LifecycleHooks[0].HeartbeatTimeout) * timeoutIncrement
 	e.GlobalHeartbeatTimeout = time.Duration(*resp.LifecycleHooks[0].GlobalTimeout) * timeoutIncrement
 	return e, nil
@@ -173,10 +178,8 @@ func (e *Event) Timeout() time.Time {
 	t := e.Start.Add(time.Duration(e.HeartbeatCount+1) * e.HeartbeatTimeout)
 	gt := e.GlobalTimeout()
 	if t.Before(gt) {
-		zap.L().Debug("chose timeout")
 		return t
 	}
-	zap.L().Debug("chose global timeout")
 	return gt
 }
 
@@ -189,6 +192,9 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 	Up.Inc()
 	defer Up.Dec()
 
+	ctx = ctxlog.WithName(ctx, "KeepAlive")
+	logger := ctxlog.L(ctx)
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -197,7 +203,7 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 
 	timeout := e.Timeout()
 	d := time.Until(timeout) - commBufD
-	zap.L().Debug("initial d", zap.Time("timeout", timeout), zap.Duration("d", d))
+	logger.Debug("initial d", zap.Time("timeout", timeout), zap.Duration("d", d))
 	if d <= 0 {
 		err := ErrExpired
 		timer.ObserveErr(err)
@@ -207,7 +213,7 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 	for {
 		select {
 		case <-ctx.Done():
-			zap.L().Debug("context done")
+			logger.Debug("context done")
 			err := ctx.Err()
 			if err == context.Canceled {
 				err = nil
@@ -216,29 +222,29 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 			return err
 
 		case <-startCheck:
-			zap.L().Debug("case: startCheck")
+			logger.Debug("case: startCheck")
 			startCheck = nil                // Disable startCheck case
 			stopCheck = make(chan error, 1) // Enable stopCheck case
 			go func() {
 				timer := metrics.NewVecTimer(KeepAliveCheckDuration)
 				ok, err := c(ctx, e)
 				if err != nil {
-					zap.L().Debug("check errored", zap.Error(err))
+					logger.Debug("check errored", zap.Error(err))
 					timer.ObserveWith(prometheus.Labels{"status": "error"})
 					stopCheck <- err // Check errored
 				} else if ok {
-					zap.L().Debug("check passed")
+					logger.Debug("check passed")
 					timer.ObserveWith(prometheus.Labels{"status": "success"})
 					stopCheck <- nil // Check passed
 				} else {
-					zap.L().Debug("check failed")
+					logger.Debug("check failed")
 					timer.ObserveWith(prometheus.Labels{"status": "failed"})
 					close(stopCheck) // Check failed
 				}
 			}()
 
 		case err, ok := <-stopCheck:
-			zap.L().Debug("case: stopCheck", zap.Bool("ok", ok), zap.Error(err))
+			logger.Debug("case: stopCheck", zap.Bool("ok", ok), zap.Error(err))
 			if err != nil {
 				return err // check errored
 			} else if ok {
@@ -251,7 +257,7 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 			e.HeartbeatCount++
 			timeout = e.Timeout()
 			d = time.Until(timeout) - commBufD
-			zap.L().Debug("new d", zap.Time("timeout", timeout), zap.Duration("d", d))
+			logger.Debug("new d", zap.Time("timeout", timeout), zap.Duration("d", d))
 			if d <= 0 {
 				return ErrExpired
 			}
@@ -273,7 +279,7 @@ func KeepAlive(ctx context.Context, client autoscalingiface.AutoScalingAPI, e *E
 			}()
 
 		case err := <-stopHeartbeat:
-			zap.L().Debug("case: stopHeartbeat")
+			logger.Debug("case: stopHeartbeat")
 			stopHeartbeat = nil // Disable stopHeartbeat case
 			if err != nil {
 				return err
