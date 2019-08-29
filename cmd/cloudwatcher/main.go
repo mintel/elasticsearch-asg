@@ -80,59 +80,34 @@ func main() {
 
 	esQuery := esasg.NewElasticsearchQueryService(esClient)
 
+
+	var nodes map[string]*esasg.Node
+	var vcpuCounts map[string]int
 	for range time.NewTicker(*interval).C { // Each --interval...
-		go func() { // ... run this goroutine concurrently.
 
-			// Get info about all the nodes in Elasticsearch.
-			nodes, err := esQuery.Nodes(ctx)
-			if err != nil {
-				logger.Fatal("error getting Elasticsearch nodes info", zap.Error(err))
-			}
+		// Get info about all the nodes in Elasticsearch.
+		nodes, err = esQuery.Nodes(ctx)
+		if err != nil {
+			logger.Fatal("error getting Elasticsearch nodes info", zap.Error(err))
+		}
 
-			// Get a count of vCPUs per instance. This is use when calculating Load %.
-			instanceIDs := make([]string, 0, len(nodes))
-			for id := range nodes {
-				instanceIDs = append(instanceIDs, id)
-			}
-			vcpuCounts, err := GetInstanceVCPUCount(ec2Client, instanceIDs)
-			if err != nil {
-				logger.Fatal("error getting EC2 instances vCPU counts", zap.Error(err))
-			}
+		// Get a count of vCPUs per instance. This is use when calculating Load %.
+		instanceIDs := make([]string, 0, len(nodes))
+		for id := range nodes {
+			instanceIDs = append(instanceIDs, id)
+		}
+		vcpuCounts, err = GetInstanceVCPUCount(ec2Client, instanceIDs)
+		if err != nil {
+			logger.Fatal("error getting EC2 instances vCPU counts", zap.Error(err))
+		}
 
-			// Generate CloudWatch metric data points from nodes and vcpu counts.
-			metricData := MakeCloudwatchData(nodes, vcpuCounts)
-			for _, datum := range metricData {
-				LogDatum(logger, datum)
-			}
-
-			// Push metrics to CloudWatch.
-			// PutMetricData() sends a max of 40960 bytes, so
-			// we'll have to batch our requests.
-			batchSize := 20 // This is probably small enough.
-			for i := 0; i < len(metricData); i += batchSize {
-				j := i + batchSize
-				if j > len(metricData) {
-					j = len(metricData)
-				}
-				batch := metricData[i:j]
-				_, err := cwClient.PutMetricDataWithContext(ctx, &cloudwatch.PutMetricDataInput{
-					Namespace:  namespace,
-					MetricData: batch,
-				})
-				if err != nil {
-					logger.Fatal("error pushing CloudWatch metrics", zap.Error(err))
-				}
-				logger.Info("pushed metrics to CloudWatch", zap.Int("count", len(batch)))
-			}
-		}()
+		// Generate CloudWatch metric data points from nodes and vcpu counts.
+		metricData := MakeCloudwatchData(nodes, vcpuCounts)
+		for _, datum := range metricData {
+			LogDatum(logger, datum)
+		}
+		if err = PushCloudwatchData(ctx, cwClient, metricData); err != nil {
+			logger.Fatal("error pushing metrics to CloudWatch", zap.Error(err))
+		}
 	}
-}
-
-// LogDatum logs a CloudWatch data point at debug level.
-func LogDatum(logger *zap.Logger, datum *cloudwatch.MetricDatum) {
-	logger = logger.With(zap.String("name", *datum.MetricName), zap.Float64("value", *datum.Value), zap.Namespace("dimensions"))
-	for _, d := range datum.Dimensions {
-		logger = logger.With(zap.String(*d.Name, *d.Value))
-	}
-	logger.Debug("metric datum")
 }

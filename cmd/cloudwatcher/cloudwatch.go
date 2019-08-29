@@ -1,13 +1,19 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
+	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
+	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 
 	"go.uber.org/zap"
 
@@ -475,6 +481,64 @@ func (s *metricsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp
 	}
 
 	return metrics
+}
+
+// PushCloudwatchData pushes metrics to CloudWatch.
+// The CloudWatch API has the following limitations:
+//  - Max 40kb request size
+//	- Single namespace per request
+//	- Max 10 dimensions per metric
+// Send metrics compressed and in batches.
+func PushCloudwatchData(ctx context.Context, svc cloudwatchiface.CloudWatchAPI, data []*cloudwatch.MetricDatum) error {
+	const batchSize = 30 // This is probably small enough.
+
+	for i := 0; i < len(data); i += batchSize {
+		j := i + batchSize
+		if j > len(data) {
+			j = len(data)
+		}
+		batch := data[i:j]
+		req, _ := svc.PutMetricDataRequest(&cloudwatch.PutMetricDataInput{
+			Namespace:  namespace,
+			MetricData: batch,
+		})
+		req.Handlers.Build.PushBack(compressPayload)
+		req.SetContext(ctx)
+		if err := req.Send(); err != nil {
+			return err
+		}
+		PushMetricsTotal.Add(float64(len(batch)))
+	}
+	return nil
+}
+
+// compressPayload compresses the payload before sending it to the API.
+// According to the documentation:
+// "Each PutMetricData request is limited to 40 KB in size for HTTP POST requests.
+// You can send a payload compressed by gzip."
+// src: https://github.com/cloudposse/prometheus-to-cloudwatch/blob/master/prometheus_to_cloudwatch.go#L237
+func compressPayload(r *request.Request) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := io.Copy(zw, r.GetBody()); err != nil {
+		zap.L().DPanic("error compressing CloudwatchRequest body", zap.Error(err))
+		return
+	}
+	if err := zw.Close(); err != nil {
+		zap.L().DPanic("error compressing CloudwatchRequest body", zap.Error(err))
+		return
+	}
+	r.SetBufferBody(buf.Bytes())
+	r.HTTPRequest.Header.Set("Content-Encoding", "gzip")
+}
+
+// LogDatum logs a CloudWatch data point at debug level.
+func LogDatum(logger *zap.Logger, datum *cloudwatch.MetricDatum) {
+	logger = logger.With(zap.String("name", *datum.MetricName), zap.Float64("value", *datum.Value), zap.Namespace("dimensions"))
+	for _, d := range datum.Dimensions {
+		logger = logger.With(zap.String(*d.Name, *d.Value))
+	}
+	logger.Debug("metric datum")
 }
 
 // sum returns a sum of d.
