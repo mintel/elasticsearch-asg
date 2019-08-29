@@ -20,12 +20,7 @@ import (
 // gets different sets of nodes from Elasticsearch across API calls.
 var ErrInconsistentNodes = errors.New("got inconsistent nodes from Elasticsearch")
 
-const (
-	// In case of ErrInconsistentNodes, retry this many times before giving up.
-	defaultInconsistentNodesRetries = 3
-
-	querySubsystem = "query"
-)
+const querySubsystem = "query"
 
 var (
 	// ElasticsearchQueryClusterNameDuration is the Prometheus metric for ElasticsearchQuery.ClusterName() durations.
@@ -96,20 +91,7 @@ func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) 
 	timer := metrics.NewVecTimer(ElasticsearchQueryNodesDuration)
 	defer timer.ObserveErr(err)
 
-	tries := defaultInconsistentNodesRetries
-	for tryCounter := 0; tryCounter < tries; tryCounter++ {
-		if tryCounter > 0 {
-			zap.L().Warn("got error describing Elasticsearch nodes",
-				zap.Error(err),
-				zap.Int("try", tryCounter+1),
-				zap.Int("max_tries", tries),
-			)
-		}
-		nodes, err = s.nodes(ctx, names...)
-		if err == nil {
-			return
-		}
-	}
+	nodes, err = s.nodes(ctx, names...)
 	return
 }
 
