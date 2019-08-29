@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"  // Logger from context
 	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
 )
 
@@ -35,8 +37,8 @@ var (
 )
 
 // GetInstanceVCPUCount gets the count of vCPUs for each EC2 instance in a list of instance IDs.
-func GetInstanceVCPUCount(ec2Svc ec2iface.EC2API, IDs []string) (map[string]int, error) {
-	logger := zap.L()
+func GetInstanceVCPUCount(ctx context.Context, ec2Svc ec2iface.EC2API, IDs []string) (map[string]int, error) {
+	logger := ctxlog.L(ctx)
 	out := make(map[string]int, len(IDs))
 	toDesc := make([]string, 0, len(IDs))
 	for _, id := range IDs {
@@ -51,7 +53,7 @@ func GetInstanceVCPUCount(ec2Svc ec2iface.EC2API, IDs []string) (map[string]int,
 	}
 	if len(toDesc) > 0 {
 		logger.Debug("DescribeInstances", zap.Strings("instance_ids", toDesc))
-		resp, err := ec2Svc.DescribeInstances(&ec2.DescribeInstancesInput{
+		resp, err := ec2Svc.DescribeInstancesWithContext(ctx, &ec2.DescribeInstancesInput{
 			InstanceIds: aws.StringSlice(toDesc),
 		})
 		if err != nil {

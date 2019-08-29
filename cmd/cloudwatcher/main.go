@@ -156,7 +156,7 @@ func main() {
 		for id := range nodes {
 			instanceIDs = append(instanceIDs, id)
 		}
-		vcpuCounts, err = GetInstanceVCPUCount(ec2Client, instanceIDs)
+		vcpuCounts, err = GetInstanceVCPUCount(ctx, ec2Client, instanceIDs)
 		if err != nil {
 			logger.Error("error getting EC2 instances vCPU counts", zap.Error(err))
 			loopDurationError.Observe(loopTimer.ObserveDuration().Seconds())

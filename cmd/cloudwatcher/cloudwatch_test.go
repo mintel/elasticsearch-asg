@@ -11,6 +11,7 @@ import (
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
 	"github.com/stretchr/testify/assert"    // Test assertions
+	"go.uber.org/zap/zaptest"               // Logging for tests
 	gock "gopkg.in/h2non/gock.v1"           // Mock HTTP endpoints
 
 	// AWS clients and stuff
@@ -20,6 +21,7 @@ import (
 
 	esasg "github.com/mintel/elasticsearch-asg"                  // Complex Elasticsearch services
 	"github.com/mintel/elasticsearch-asg/cmd/cloudwatcher/mocks" // Mocked AWS client(s)
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"             // Logger from context
 	"github.com/mintel/elasticsearch-asg/pkg/str"                // String utilities
 )
 
@@ -29,6 +31,9 @@ const (
 )
 
 func TestMakeCloudwatchData(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	ctx := ctxlog.WithLogger(context.Background(), logger)
+
 	defer gock.Off()
 	gock.New(localhost).Get("/_nodes/_all/_all").
 		Reply(http.StatusOK).Type("json").BodyString(loadTestData(t, "nodes_info.json"))
@@ -76,7 +81,7 @@ func TestMakeCloudwatchData(t *testing.T) {
 	}
 
 	ec2Svc := &mocks.EC2API{}
-	ec2Svc.On("DescribeInstances", &ec2.DescribeInstancesInput{
+	ec2Svc.On("DescribeInstancesWithContext", ctx, &ec2.DescribeInstancesInput{
 		InstanceIds: instanceIDPtrs,
 	}).Once().Return(&ec2.DescribeInstancesOutput{
 		Reservations: []*ec2.Reservation{
@@ -86,7 +91,7 @@ func TestMakeCloudwatchData(t *testing.T) {
 		},
 	}, error(nil))
 
-	vcpuCounts, err := GetInstanceVCPUCount(ec2Svc, instanceIDs)
+	vcpuCounts, err := GetInstanceVCPUCount(ctx, ec2Svc, instanceIDs)
 	if !assert.NoError(t, err) {
 		return
 	}
