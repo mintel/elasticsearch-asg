@@ -7,8 +7,11 @@ import (
 	"sync"
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
-	"go.uber.org/zap"                       // Logging
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.uber.org/zap" // Logging
 
+	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
 	"github.com/mintel/elasticsearch-asg/pkg/es"  // Elasticsearch client extensions
 	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
 )
@@ -17,8 +20,48 @@ import (
 // gets different sets of nodes from Elasticsearch across API calls.
 var ErrInconsistentNodes = errors.New("got inconsistent nodes from Elasticsearch")
 
-// In case of ErrInconsistentNodes, retry this many times before giving up.
-const defaultInconsistentNodesRetries = 3
+const (
+	// In case of ErrInconsistentNodes, retry this many times before giving up.
+	defaultInconsistentNodesRetries = 3
+
+	querySubsystem = "query"
+)
+
+var (
+	// elasticsearchQueryClusterNameDuration is the Prometheus metric for ElasticsearchQuery.ClusterName() durations.
+	elasticsearchQueryClusterNameDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: querySubsystem,
+		Name:      "cluster_name_request_seconds",
+		Help:      "Requests to get Elasticsearch cluster name.",
+		Buckets:   prometheus.DefBuckets,
+	})
+
+	// elasticsearchQueryClusterNameErrors is the Prometheus metric for ElasticsearchQuery.ClusterName() errors.
+	elasticsearchQueryClusterNameErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: querySubsystem,
+		Name:      "cluster_name_errors_total",
+		Help:      "Requests to get Elasticsearch cluster name.",
+	}, []string{metrics.LabelStatusCode})
+
+	// elasticsearchQueryNodesDuration is the Prometheus metric for ElasticsearchQuery.Nodes() and Node() durations.
+	elasticsearchQueryNodesDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: querySubsystem,
+		Name:      "nodes_request_seconds",
+		Help:      "Requests to get Elasticsearch nodes info.",
+		Buckets:   prometheus.DefBuckets,
+	})
+
+	// elasticsearchQueryNodesErrors is the Prometheus metric for ElasticsearchQuery.Nodes() and Node() errors.
+	elasticsearchQueryNodesErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: querySubsystem,
+		Name:      "nodes_errors_total",
+		Help:      "Requests to get Elasticsearch nodes info.",
+	}, []string{metrics.LabelStatusCode})
+)
 
 // ElasticsearchQueryService implements methods that read from Elasticsearch endpoints.
 type ElasticsearchQueryService struct {
@@ -32,6 +75,18 @@ func NewElasticsearchQueryService(client *elastic.Client) *ElasticsearchQuerySer
 		client: client,
 		logger: zap.L().Named("ElasticsearchQueryService"),
 	}
+}
+
+// ClusterName return the name of the Elasticsearch cluster.
+func (s *ElasticsearchQueryService) ClusterName(ctx context.Context) (string, error) {
+	timer := prometheus.NewTimer(elasticsearchQueryClusterNameDuration)
+	defer timer.ObserveDuration()
+	resp, err := s.client.ClusterHealth().Do(ctx)
+	if err != nil {
+		elasticsearchQueryClusterNameErrors.WithLabelValues(metrics.ElasticsearchStatusCode(err)).Inc()
+		return "", err
+	}
+	return resp.ClusterName, nil
 }
 
 // Node returns a single node with the given name.
@@ -49,6 +104,9 @@ func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (*Nod
 // If names are past, limit to nodes with those names.
 // It's left up to the caller to check if all the names are in the response.
 func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
+	timer := prometheus.NewTimer(elasticsearchQueryNodesDuration)
+	defer timer.ObserveDuration()
+
 	var result map[string]*Node
 	var err error
 	tries := defaultInconsistentNodesRetries
@@ -62,6 +120,7 @@ func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) 
 		}
 		result, err = s.nodes(ctx, names...)
 		if err == nil {
+			elasticsearchQueryNodesErrors.WithLabelValues(metrics.ElasticsearchStatusCode(err)).Inc()
 			return result, nil
 		}
 	}
