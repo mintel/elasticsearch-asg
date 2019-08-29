@@ -6,11 +6,12 @@ import (
 	"net/http/httptest"
 	"os"
 
-	"github.com/heptiolabs/healthcheck"                       // Framework for implementing healthchecks.
 	"github.com/prometheus/client_golang/prometheus"          // Prometheus
 	"github.com/prometheus/client_golang/prometheus/promhttp" // Prometheus HTTP handler.
-	"go.uber.org/zap"                                         // Logging
-	kingpin "gopkg.in/alecthomas/kingpin.v2"                  // Command line args parser
+
+	"github.com/heptiolabs/healthcheck"      // Framework for implementing healthchecks.
+	"go.uber.org/zap"                        // Logging
+	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line args parser
 
 	"github.com/mintel/elasticsearch-asg/cmd"                    // Common logging setup func
 	eshealth "github.com/mintel/elasticsearch-asg/pkg/es/health" // Funcs to evaluate Elasticsearch health in various ways

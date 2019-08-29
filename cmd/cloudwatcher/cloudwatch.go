@@ -9,15 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"go.uber.org/zap"
+
 	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"go.uber.org/zap"
 
 	esasg "github.com/mintel/elasticsearch-asg"   // Complex Elasticsearch services
 	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics

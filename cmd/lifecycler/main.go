@@ -10,10 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/heptiolabs/healthcheck"
-	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/heptiolabs/healthcheck"
+	elastic "github.com/olivere/elastic/v7"  // Elasticsearch client
 	"go.uber.org/zap"                        // Logging
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line arg parser.
 

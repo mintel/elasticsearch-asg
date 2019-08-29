@@ -3,15 +3,16 @@ package main
 import (
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	cache "github.com/patrickmn/go-cache" // In-memory cache
+	"go.uber.org/zap"                     // Logging
+
 	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-
-	cache "github.com/patrickmn/go-cache" // In-memory cache
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"go.uber.org/zap" // Logging
 
 	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
 )
