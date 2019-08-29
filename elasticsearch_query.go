@@ -85,7 +85,7 @@ func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (node
 
 // Nodes returns info and stats about the nodes in the Elasticsearch cluster,
 // as a map from node name to Node.
-// If names are past, limit to nodes with those names.
+// If names are passed, limit to nodes with those names.
 // It's left up to the caller to check if all the names are in the response.
 func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) (nodes map[string]*Node, err error) {
 	timer := metrics.NewVecTimer(ElasticsearchQueryNodesDuration)
