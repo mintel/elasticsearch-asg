@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	elastic "github.com/olivere/elastic/v7"  // Elasticsearch client
+	"github.com/heptiolabs/healthcheck"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"                        // Logging
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line arg parser.
 
@@ -22,6 +26,7 @@ import (
 
 	esasg "github.com/mintel/elasticsearch-asg"         // Complex Elasticsearch services
 	"github.com/mintel/elasticsearch-asg/cmd"           // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/metrics"       // Prometheus metrics
 	"github.com/mintel/elasticsearch-asg/pkg/es"        // Elasticsearch client extensions
 	"github.com/mintel/elasticsearch-asg/pkg/lifecycle" // Handle AWS Autoscaling Group lifecycle hook event messages.
 	"github.com/mintel/elasticsearch-asg/pkg/squeues"   // SQS message dispatcher
@@ -34,13 +39,17 @@ const (
 	esRetryMax    = 1200 * time.Millisecond
 )
 
+const subsystem = "lifecycler"
+
 // defaultURL is the default Elasticsearch URL.
 const defaultURL = "http://localhost:9200"
 
 // Command line opts
 var (
-	queueURL = kingpin.Arg("queue", "URL of SQS queue receiving lifecycle hook events.").Required().String()
-	esURL    = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
+	queueURL      = kingpin.Arg("queue", "URL of SQS queue receiving lifecycle hook events.").Required().String()
+	esURL         = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
+	metricsListen = kingpin.Flag("metrics.listen", "Address on which to expose Prometheus metrics.").Default(":9701").String()
+	metricsPath   = kingpin.Flag("metrics.path", "Path under which to expose Prometheus metrics.").Default("/metrics").String()
 )
 
 // The Elasticsearch API only allows the clearing of all master voting exclusions at once,
@@ -83,6 +92,13 @@ func main() {
 	}
 	conf := aws.NewConfig().WithRegion(region).WithMaxRetries(awsMaxRetries)
 	sess := session.Must(session.NewSession(conf))
+	if *cmd.VerboseFlag {
+		// If verbose mode is on, add Prometheus metrics for AWS API call duration and errors.
+		prometheus.WrapRegistererWithPrefix(
+			prometheus.BuildFQName(metrics.Namespace, "", subsystem),
+			prometheus.DefaultRegisterer,
+		).MustRegister(metrics.InstrumentAWS(&sess.Handlers, nil)...) // TODO: Define better buckets.
+	}
 	asClient := autoscaling.New(sess)
 	sqsClient := sqs.New(sess)
 
@@ -95,6 +111,26 @@ func main() {
 	if err != nil {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
+
+	// Setup healthchecks
+	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", subsystem))
+	health.AddLivenessCheck("up", func() error {
+		return nil
+	})
+	var lastErr error
+	health.AddReadinessCheck("noerror", func() error {
+		return lastErr
+	})
+
+	// Serve health checks and Prometheus metrics.
+	go func() {
+		http.Handle(*metricsPath, promhttp.Handler())
+		http.HandleFunc("/live", health.LiveEndpoint)
+		http.HandleFunc("/ready", health.ReadyEndpoint)
+		if err := http.ListenAndServe(*metricsListen, nil); err != nil {
+			logger.Fatal("error serving metrics", zap.Error(err))
+		}
+	}()
 
 	// queue will consume messages from an SQS to which Autoscaling Group lifecycle hook messages are published.
 	// It will call handlerFn (below) for each message, updating the message's visibility timeout
