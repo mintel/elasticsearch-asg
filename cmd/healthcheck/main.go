@@ -87,7 +87,7 @@ func main() {
 
 	logger.Info("Serving health and readiness checks")
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer, promhttp.HandlerOpts{}))
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/live", checks.LiveEndpoint)
 	mux.HandleFunc("/ready", checks.ReadyEndpoint)
 	endpoint := fmt.Sprintf(":%d", *port)
