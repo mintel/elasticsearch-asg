@@ -88,7 +88,8 @@ func main() {
 		// Get info about all the nodes in Elasticsearch.
 		nodes, err = esQuery.Nodes(ctx)
 		if err != nil {
-			logger.Fatal("error getting Elasticsearch nodes info", zap.Error(err))
+			logger.Error("error getting Elasticsearch nodes info", zap.Error(err))
+			continue
 		}
 
 		// Get a count of vCPUs per instance. This is use when calculating Load %.
@@ -98,7 +99,8 @@ func main() {
 		}
 		vcpuCounts, err = GetInstanceVCPUCount(ec2Client, instanceIDs)
 		if err != nil {
-			logger.Fatal("error getting EC2 instances vCPU counts", zap.Error(err))
+			logger.Error("error getting EC2 instances vCPU counts", zap.Error(err))
+			continue
 		}
 
 		// Generate CloudWatch metric data points from nodes and vcpu counts.
@@ -107,7 +109,8 @@ func main() {
 			LogDatum(logger, datum)
 		}
 		if err = PushCloudwatchData(ctx, cwClient, metricData); err != nil {
-			logger.Fatal("error pushing metrics to CloudWatch", zap.Error(err))
+			logger.Error("error pushing metrics to CloudWatch", zap.Error(err))
+			continue
 		}
 	}
 }
