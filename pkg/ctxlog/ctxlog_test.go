@@ -61,3 +61,19 @@ func TestWithName(t *testing.T) {
 	assert.Equal(t, 2, logs.Len(), "wrong number of log entries")
 	assert.Equal(t, name, logs.All()[1].Entry.LoggerName, "logger entry has wrong name")
 }
+
+func TestWithOptions(t *testing.T) {
+	core, logs := observer.New(zapcore.DebugLevel)
+	count := 0
+	opt := zap.Hooks(func(zapcore.Entry) error {
+		count++
+		return nil
+	})
+	logger := zap.New(core)
+	logger.Debug("no opt")
+	ctx := WithLogger(context.Background(), logger)
+	ctx = WithOptions(ctx, opt)
+	L(ctx).Debug("with opt")
+	assert.Equal(t, 2, logs.Len(), "wrong number of log entries")
+	assert.Equal(t, 1, count, "counter incremented wrong number of times")
+}

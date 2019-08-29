@@ -51,6 +51,11 @@ func WithName(ctx context.Context, name string) context.Context {
 	return WithLogger(ctx, GetLogger(ctx).Named(name))
 }
 
+// WithOptions adds the given options to the Logger embedded in ctx.
+func WithOptions(ctx context.Context, opts ...zap.Option) context.Context {
+	return WithLogger(ctx, GetLogger(ctx).WithOptions(opts...))
+}
+
 // GetLogger either returns an embedded Logger from the context
 // or a nop Logger if nothing is embedded.
 func GetLogger(ctx context.Context) *zap.Logger {
