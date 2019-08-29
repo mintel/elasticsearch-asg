@@ -6,8 +6,15 @@ package metrics
 const Namespace = "elasticsearchasg"
 
 const (
+	// LabelMethod is the Prometheus label name for HTTP method.
+	LabelMethod = "method"
+
 	// LabelStatusCode is the Prometheus label name for HTTP status codes.
-	LabelStatusCode = "status_code"
+	LabelStatusCode = "code"
+
+	// LabelStatus is the Prometheus label name for the status of a process
+	// such as "success" or "error".
+	LabelStatus = "status"
 )
 
 // DefaultObjectives are default objectives for Prometheus Summary metrics.

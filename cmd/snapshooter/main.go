@@ -37,7 +37,7 @@ var (
 		Name:      "mainloop_duration_seconds",
 		Help:      "Tracks the duration of main loop.",
 		Buckets:   prometheus.DefBuckets, // TODO: Define better buckets.
-	}, []string{"status"})
+	}, []string{metrics.LabelStatus})
 	loopDurationSuccess = loopDuration.WithLabelValues("success")
 	loopDurationError   = loopDuration.WithLabelValues("error")
 	loopDurationSleep   = loopDuration.WithLabelValues("sleep")

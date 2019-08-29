@@ -63,10 +63,10 @@ func TestInstrumentAWSDuration(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		labels := prometheus.Labels{
-			"method":    "GET",
-			"service":   serviceName,
-			"operation": "DoSuccessfulThing",
-			"code":      strconv.Itoa(http.StatusOK),
+			LabelMethod:     "GET",
+			"service":       serviceName,
+			"operation":     "DoSuccessfulThing",
+			LabelStatusCode: strconv.Itoa(http.StatusOK),
 		}
 		m := &metricmocks.Observer{}
 		duration.On("With", labels).Return(m).Once()
@@ -83,10 +83,10 @@ func TestInstrumentAWSDuration(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		labels := prometheus.Labels{
-			"method":    "POST",
-			"service":   serviceName,
-			"operation": "DoErrorThing",
-			"code":      strconv.Itoa(http.StatusMethodNotAllowed),
+			LabelMethod:     "POST",
+			"service":       serviceName,
+			"operation":     "DoErrorThing",
+			LabelStatusCode: strconv.Itoa(http.StatusMethodNotAllowed),
 		}
 		m := &metricmocks.Observer{}
 		duration.On("With", labels).Return(m).Once()

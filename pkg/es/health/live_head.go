@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/heptiolabs/healthcheck"     // Healthchecks framework
-	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
-	"go.uber.org/zap"                       // Logging
+	"github.com/heptiolabs/healthcheck"           // Healthchecks framework
+	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
+	elastic "github.com/olivere/elastic/v7"       // Elasticsearch client
+	"go.uber.org/zap"                             // Logging
 )
 
 // CheckLiveHEAD checks if a HEAD request to / returns 200.
@@ -31,11 +32,11 @@ func CheckLiveHEAD(URL string) healthcheck.Check {
 
 		if resp.StatusCode != 200 {
 			const msg = "HEAD request returned non-200 status code"
-			logger.Debug(msg, zap.Int("status_code", resp.StatusCode))
+			logger.Debug(msg, zap.Int(metrics.LabelStatusCode, resp.StatusCode))
 			return errors.New(msg)
 		}
 
-		logger.Info("HEAD request returned 200 OK", zap.Int("status_code", resp.StatusCode))
+		logger.Info("HEAD request returned 200 OK", zap.Int(metrics.LabelStatusCode, resp.StatusCode))
 		return nil
 	}
 }

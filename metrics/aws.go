@@ -37,7 +37,7 @@ func InstrumentAWS(handlers *request.Handlers, buckets []float64) []prometheus.C
 			Help:    "Duration of AWS API requests.",
 			Buckets: buckets,
 		},
-		[]string{"method", "service", "operation", "code"},
+		[]string{LabelMethod, "service", "operation", LabelStatusCode},
 	)
 	instrumentAWSDuration(handlers, duration)
 	return []prometheus.Collector{duration}
@@ -50,10 +50,10 @@ func instrumentAWSDuration(handlers *request.Handlers, o prometheus.ObserverVec)
 			timer := NewVecTimer(o)
 			r.Handlers.CompleteAttempt.PushFront(func(r *request.Request) {
 				labels := prometheus.Labels{
-					"method":    r.Operation.HTTPMethod,
-					"service":   r.ClientInfo.ServiceName,
-					"operation": r.Operation.Name,
-					"code":      strconv.Itoa(r.HTTPResponse.StatusCode),
+					LabelMethod:     r.Operation.HTTPMethod,
+					"service":       r.ClientInfo.ServiceName,
+					"operation":     r.Operation.Name,
+					LabelStatusCode: strconv.Itoa(r.HTTPResponse.StatusCode),
 				}
 				timer.ObserveWith(labels)
 			})
