@@ -30,8 +30,8 @@ func NewVecTimer(v prometheus.ObserverVec) *VecTimer {
 	}
 }
 
-// ObserveWithLabelValues records the duration passed since the VecTimer was created with
-// NewVecTimer. It derives an Observer from the ObserverVec passed during construction
+// ObserveWithLabelValues records the duration passed since the VecTimer was created.
+// It derives an Observer from the ObserverVec passed during construction
 // from the provided labels. It calls the Observe method of the Observer
 // with the duration in seconds as an argument. The observed duration is also returned.
 //
@@ -45,8 +45,8 @@ func (t *VecTimer) ObserveWithLabelValues(labels ...string) time.Duration {
 	return d
 }
 
-// ObserveWith records the duration passed since the VecTimer was created with
-// NewVecTimer. It derives an Observer from the ObserverVec passed during construction
+// ObserveWith records the duration passed since the VecTimer was created.
+// It derives an Observer from the ObserverVec passed during construction
 // from the provided labels. It calls the Observe method of the Observer
 // with the duration in seconds as an argument. The observed duration is also returned.
 //
