@@ -9,11 +9,29 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
 	cache "github.com/patrickmn/go-cache" // In-memory cache
-	"go.uber.org/zap"                     // Logging
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.uber.org/zap" // Logging
+
+	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
 )
 
 // Cache EC2 instance ID => int count of vcpu cores.
 var vcpuCache = cache.New(5*time.Minute, 10*time.Minute)
+
+var (
+	// DescEC2InstancesCacheSize is a Prometheus metric that tracks the number
+	// of cached values for count of EC2 instance vCPUs.
+	//nolint:deadcode,unused,varcheck
+	vCPUCacheSize = promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: subsystem,
+		Name:      "instance_vcpus_cache_size",
+		Help:      "Size of the cache of EC2 instance vCPU count information.",
+	}, func() float64 {
+		return float64(vcpuCache.ItemCount())
+	})
+)
 
 // GetInstanceVCPUCount gets the count of vCPUs for each EC2 instance in a list of instance IDs.
 func GetInstanceVCPUCount(ec2Svc ec2iface.EC2API, IDs []string) (map[string]int, error) {

@@ -15,10 +15,23 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 
 	esasg "github.com/mintel/elasticsearch-asg"   // Complex Elasticsearch services
+	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
 	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
+)
+
+var (
+	// PushMetricsTotal tracks the number of metric data points pushed to CloudWatch.
+	PushMetricsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: subsystem,
+		Name:      "pushed_metrics_total",
+		Help:      "Count of metrics pushed to AWS CloudWatch.",
+	})
 )
 
 // MakeCloudwatchData returns a list of CloudWatch
