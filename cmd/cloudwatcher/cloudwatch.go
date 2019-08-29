@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	// PushMetricsTotal tracks the number of metric data points pushed to CloudWatch.
-	PushMetricsTotal = promauto.NewCounter(prometheus.CounterOpts{
+	// pushMetricsTotal tracks the number of metric data points pushed to CloudWatch.
+	pushMetricsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: subsystem,
 		Name:      "pushed_metrics_total",
@@ -521,7 +521,7 @@ func PushCloudwatchData(ctx context.Context, svc cloudwatchiface.CloudWatchAPI, 
 		if err := req.Send(); err != nil {
 			return err
 		}
-		PushMetricsTotal.Add(float64(len(batch)))
+		pushMetricsTotal.Add(float64(len(batch)))
 	}
 	return nil
 }
