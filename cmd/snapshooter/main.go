@@ -2,30 +2,72 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"time"
 
-	elastic "github.com/olivere/elastic/v7"  // Elasticsearch client
+	"github.com/heptiolabs/healthcheck"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"                        // Logging
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line args parser
 
-	"github.com/mintel/elasticsearch-asg/cmd" // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/cmd"     // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
 )
 
 // SnapshotFormat is the format for snapshot names (time.Time.Format()).
 // Elasticsearch snapshot names may not contain spaces.
 const SnapshotFormat = "snapshooter-2006-01-02t15-04-05"
 
+const subsystem = "snapshooter"
+
+var (
+	// USE - loop timing
+	//  - Utilization: ratio of active vs sleep time.
+	//  - Saturation: count of missed snapshots.
+	//  - Errors: count of errors during mainloop.
+
+	// RED - client requests
+	//  - Rate:
+	//  - Error:
+	//  - Duration:
+
+	// Four Golden Signals
+	//  - Latency (time taken to serve a request)
+	//  - Traffic (how much demand is placed on your system)
+	//  - Errors (rate of requests that are failing)
+	//  - Saturation (how “full” your service is)
+
+	// loopDuration tracks the duration of main loop of snapshooter.
+	// It has a label `status` which is one of "success", "error", or "sleep".
+	loopDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: subsystem,
+		Name:      "mainloop_duration_seconds",
+		Help:      "Tracks the duration of main loop.",
+		Buckets:   prometheus.DefBuckets, // TODO: Define better buckets.
+	}, []string{"status"})
+	loopDurationSuccess = loopDuration.WithLabelValues("success")
+	loopDurationError   = loopDuration.WithLabelValues("error")
+	loopDurationSleep   = loopDuration.WithLabelValues("sleep")
+)
+
 // defaultURL is the default Elasticsearch URL.
 const defaultURL = "http://localhost:9200"
 
 // Command line opts
 var (
-	esURL        = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
-	windows      = kingpin.Flag("window", "Snapshot frequency + TTL. May be set multiple times. ISO 8601 Duration string format. Example: `--window P1M=PT1H` == keep hourly snapshots for 1 month.").PlaceHolder("P1M=PT1H").Required().StringMap()
-	delete       = kingpin.Flag("delete", "If set, clean up old snapshots. This is false by default for safety's sake.").Short('d').Bool()
-	repoName     = kingpin.Flag("repo", "Name of the snapshot repository.").Default("backups").String()
-	repoType     = kingpin.Flag("type", "If set, create a repository of this type before creating snapshots. See also: '--settings'").String()
-	repoSettings = kingpin.Flag("settings", "Use these settings creating the snapshot repository. May be set multiple times. Example: `--type=s3 --settings bucket=my_bucket`").StringMap()
+	esURL         = kingpin.Arg("url", "Elasticsearch URL. Default: "+defaultURL).Default(defaultURL).URL()
+	windows       = kingpin.Flag("window", "Snapshot frequency + TTL. May be set multiple times. ISO 8601 Duration string format. Example: `--window P1M=PT1H` == keep hourly snapshots for 1 month.").PlaceHolder("P1M=PT1H").Required().StringMap()
+	delete        = kingpin.Flag("delete", "If set, clean up old snapshots. This is false by default for safety's sake.").Short('d').Bool()
+	repoName      = kingpin.Flag("repo", "Name of the snapshot repository.").Default("backups").String()
+	repoType      = kingpin.Flag("type", "If set, create a repository of this type before creating snapshots. See also: '--settings'").String()
+	repoSettings  = kingpin.Flag("settings", "Use these settings creating the snapshot repository. May be set multiple times. Example: `--type=s3 --settings bucket=my_bucket`").StringMap()
+	metricsListen = kingpin.Flag("metrics.listen", "Address on which to expose Prometheus metrics.").Default(":9702").String()
+	metricsPath   = kingpin.Flag("metrics.path", "Path under which to expose Prometheus metrics.").Default("/metrics").String()
 )
 
 var logger *zap.Logger // XXX: I don't like a global logger var like this. Refactor to derive logger from context.
@@ -34,11 +76,8 @@ func main() {
 	kingpin.CommandLine.Help = "Create and clean up Elasticsearch snapshots on a schedule."
 	kingpin.Parse()
 
-	// Deference global repoName flag pointer to local variable.
-	repoName := *repoName
-
 	// Set up logger.
-	logger = cmd.SetupLogging().With(zap.String("snapshot_repository", repoName))
+	logger = cmd.SetupLogging().With(zap.String("snapshot_repository", *repoName))
 	defer func() {
 		// Make sure any buffered logs get flushed before exiting successfully.
 		// This should never happen because snapshooter should never exit successfully,
@@ -74,13 +113,35 @@ func main() {
 
 	// If --type/--settings flags are set, create the snapshot repository if it doesn't exist.
 	if repoType != nil && *repoType != "" {
-		if err := ensureSnapshotRepo(ctx, client, *repoType, repoName, *repoSettings); err != nil {
+		if err := ensureSnapshotRepo(ctx, client, *repoType, *repoName, *repoSettings); err != nil {
 			logger.Fatal("error ensuring snapshot repository exists", zap.Error(err))
 		}
 	}
 
+	// Setup healthchecks
+	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", subsystem))
+	health.AddLivenessCheck("up", func() error {
+		return nil
+	})
+	var loopErr error
+	health.AddReadinessCheck("noerror", func() error {
+		return loopErr
+	})
+
+	// Serve health checks and Prometheus metrics.
+	go func() {
+		http.Handle(*metricsPath, promhttp.Handler())
+		http.HandleFunc("/live", health.LiveEndpoint)
+		http.HandleFunc("/ready", health.ReadyEndpoint)
+		if err := http.ListenAndServe(*metricsListen, nil); err != nil {
+			logger.Fatal("error serving metrics", zap.Error(err))
+		}
+	}()
+
 	for nextSnapshot := snapshotSchedule.Next(); ; nextSnapshot = snapshotSchedule.Next() {
+		timer := prometheus.NewTimer(loopDurationSleep)
 		time.Sleep(time.Until(nextSnapshot)) // Wait to start the snapshot
+		timer.ObserveDuration()
 
 		// Start a goroutine to create/delete snapshots.
 		// Accoring to https://www.elastic.co/guide/en/elasticsearch/reference/7.0/modules-snapshots.html
@@ -94,15 +155,21 @@ func main() {
 		// Elasticsearch will probably return an error and snapshooter will exit.
 		go func(t time.Time) {
 			logger.Debug("starting snapshot create/delete goroutine")
-			if err := createSnapshot(ctx, client, repoName, t); err != nil {
-				logger.Fatal("error while creating new snapshot", zap.Error(err))
+			timer := prometheus.NewTimer(nil)
+			if err := createSnapshot(ctx, client, *repoName, t); err != nil {
+				loopDurationError.Observe(timer.ObserveDuration().Seconds())
+				logger.Error("error while creating new snapshot", zap.Error(err))
+				return
 			}
 			if !*delete {
 				return // If the --delete flag isn't set, don't clean up old snapshots.
 			}
-			if err := deleteOldSnapshots(ctx, client, repoName, snapshotSchedule); err != nil {
-				logger.Fatal("error while deleting old snapshots", zap.Error(err))
+			if err := deleteOldSnapshots(ctx, client, *repoName, snapshotSchedule); err != nil {
+				loopDurationError.Observe(timer.ObserveDuration().Seconds())
+				logger.Error("error while deleting old snapshots", zap.Error(err))
+				return
 			}
+			loopDurationSuccess.Observe(timer.ObserveDuration().Seconds())
 		}(nextSnapshot)
 	}
 }
