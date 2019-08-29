@@ -28,39 +28,23 @@ const (
 )
 
 var (
-	// elasticsearchQueryClusterNameDuration is the Prometheus metric for ElasticsearchQuery.ClusterName() durations.
-	elasticsearchQueryClusterNameDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+	// ElasticsearchQueryClusterNameDuration is the Prometheus metric for ElasticsearchQuery.ClusterName() durations.
+	ElasticsearchQueryClusterNameDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: querySubsystem,
-		Name:      "cluster_name_request_seconds",
+		Name:      "cluster_name_request_duration_seconds",
 		Help:      "Requests to get Elasticsearch cluster name.",
 		Buckets:   prometheus.DefBuckets,
-	})
+	}, []string{metrics.LabelStatus})
 
-	// elasticsearchQueryClusterNameErrors is the Prometheus metric for ElasticsearchQuery.ClusterName() errors.
-	elasticsearchQueryClusterNameErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+	// ElasticsearchQueryNodesDuration is the Prometheus metric for ElasticsearchQuery.Nodes() and Node() durations.
+	ElasticsearchQueryNodesDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: querySubsystem,
-		Name:      "cluster_name_errors_total",
-		Help:      "Requests to get Elasticsearch cluster name.",
-	}, []string{metrics.LabelStatusCode})
-
-	// elasticsearchQueryNodesDuration is the Prometheus metric for ElasticsearchQuery.Nodes() and Node() durations.
-	elasticsearchQueryNodesDuration = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: metrics.Namespace,
-		Subsystem: querySubsystem,
-		Name:      "nodes_request_seconds",
+		Name:      "nodes_request_duration_seconds",
 		Help:      "Requests to get Elasticsearch nodes info.",
 		Buckets:   prometheus.DefBuckets,
-	})
-
-	// elasticsearchQueryNodesErrors is the Prometheus metric for ElasticsearchQuery.Nodes() and Node() errors.
-	elasticsearchQueryNodesErrors = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: metrics.Namespace,
-		Subsystem: querySubsystem,
-		Name:      "nodes_errors_total",
-		Help:      "Requests to get Elasticsearch nodes info.",
-	}, []string{metrics.LabelStatusCode})
+	}, []string{metrics.LabelStatus})
 )
 
 // ElasticsearchQueryService implements methods that read from Elasticsearch endpoints.
@@ -78,37 +62,40 @@ func NewElasticsearchQueryService(client *elastic.Client) *ElasticsearchQuerySer
 }
 
 // ClusterName return the name of the Elasticsearch cluster.
-func (s *ElasticsearchQueryService) ClusterName(ctx context.Context) (string, error) {
-	timer := prometheus.NewTimer(elasticsearchQueryClusterNameDuration)
-	defer timer.ObserveDuration()
-	resp, err := s.client.ClusterHealth().Do(ctx)
+func (s *ElasticsearchQueryService) ClusterName(ctx context.Context) (name string, err error) {
+	timer := metrics.NewVecTimer(ElasticsearchQueryClusterNameDuration)
+	defer timer.ObserveErr(err)
+	var resp *elastic.ClusterHealthResponse
+	resp, err = s.client.ClusterHealth().Do(ctx)
 	if err != nil {
-		elasticsearchQueryClusterNameErrors.WithLabelValues(metrics.ElasticsearchStatusCode(err)).Inc()
-		return "", err
+		return
 	}
-	return resp.ClusterName, nil
+	name = resp.ClusterName
+	return
 }
 
 // Node returns a single node with the given name.
 // Will return nil if the node doesn't exist.
-func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (*Node, error) {
-	nodes, err := s.Nodes(ctx, name)
+func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (node *Node, err error) {
+	timer := metrics.NewVecTimer(ElasticsearchQueryNodesDuration)
+	defer timer.ObserveErr(err)
+	var nodes map[string]*Node
+	nodes, err = s.nodes(ctx, name)
 	if err != nil {
-		return nil, err
+		return
 	}
-	return nodes[name], nil
+	node = nodes[name]
+	return
 }
 
 // Nodes returns info and stats about the nodes in the Elasticsearch cluster,
 // as a map from node name to Node.
 // If names are past, limit to nodes with those names.
 // It's left up to the caller to check if all the names are in the response.
-func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
-	timer := prometheus.NewTimer(elasticsearchQueryNodesDuration)
-	defer timer.ObserveDuration()
+func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) (nodes map[string]*Node, err error) {
+	timer := metrics.NewVecTimer(ElasticsearchQueryNodesDuration)
+	defer timer.ObserveErr(err)
 
-	var result map[string]*Node
-	var err error
 	tries := defaultInconsistentNodesRetries
 	for tryCounter := 0; tryCounter < tries; tryCounter++ {
 		if tryCounter > 0 {
@@ -118,13 +105,12 @@ func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) 
 				zap.Int("max_tries", tries),
 			)
 		}
-		result, err = s.nodes(ctx, names...)
+		nodes, err = s.nodes(ctx, names...)
 		if err == nil {
-			elasticsearchQueryNodesErrors.WithLabelValues(metrics.ElasticsearchStatusCode(err)).Inc()
-			return result, nil
+			return
 		}
 	}
-	return result, err
+	return
 }
 
 func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {

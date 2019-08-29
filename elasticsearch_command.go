@@ -22,39 +22,23 @@ const (
 )
 
 var (
-	// elasticsearchCommandDrainDuration is the Prometheus metric for ElasticsearchCommand.Drain() durations.
-	elasticsearchCommandDrainDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+	// ElasticsearchCommandDrainDuration is the Prometheus metric for ElasticsearchCommand.Drain() durations.
+	ElasticsearchCommandDrainDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: commandSubsystem,
-		Name:      "drain_shards_request_seconds",
+		Name:      "drain_shards_request_duration_seconds",
 		Help:      "Requests to drain shards from Elasticsearch node.",
 		Buckets:   prometheus.DefBuckets,
-	})
+	}, []string{metrics.LabelStatus})
 
-	// elasticsearchCommandDrainErrors is the Prometheus metric for ElasticsearchCommand.Drain() errors.
-	elasticsearchCommandDrainErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+	// ElasticsearchCommandUndrainDuration is the Prometheus metric for ElasticsearchCommand.Undrain() durations.
+	ElasticsearchCommandUndrainDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: commandSubsystem,
-		Name:      "drain_shards_errors_total",
-		Help:      "Requests to drain shards from Elasticsearch node.",
-	}, []string{metrics.LabelStatusCode})
-
-	// elasticsearchCommandUndrainDuration is the Prometheus metric for ElasticsearchCommand.Undrain() durations.
-	elasticsearchCommandUndrainDuration = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: metrics.Namespace,
-		Subsystem: commandSubsystem,
-		Name:      "undrain_shards_request_seconds",
+		Name:      "undrain_shards_request_duration_seconds",
 		Help:      "Requests to undrain shards from Elasticsearch node.",
 		Buckets:   prometheus.DefBuckets,
-	})
-
-	// elasticsearchCommandUndrainErrors is the Prometheus metric for ElasticsearchCommand.Undrain() errors.
-	elasticsearchCommandUndrainErrors = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: metrics.Namespace,
-		Subsystem: commandSubsystem,
-		Name:      "undrain_shards_errors_total",
-		Help:      "Requests to undrain shards from Elasticsearch node.",
-	}, []string{metrics.LabelStatusCode})
+	}, []string{metrics.LabelStatus})
 )
 
 // ElasticsearchCommandService implements methods that write to Elasticsearch endpoints.
@@ -76,15 +60,16 @@ func NewElasticsearchCommandService(client *elastic.Client) *ElasticsearchComman
 // to remove shards from the node until empty.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string) error {
+func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string) (err error) {
+	timer := metrics.NewVecTimer(ElasticsearchCommandDrainDuration)
+	defer timer.ObserveErr(err)
+
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 
-	timer := prometheus.NewTimer(elasticsearchCommandDrainDuration)
-	defer timer.ObserveDuration()
-	resp, err := es.NewClusterGetSettingsService(s.client).Do(ctx)
+	var resp *es.ClusterGetSettingsResponse
+	resp, err = es.NewClusterGetSettingsService(s.client).Do(ctx)
 	if err != nil {
-		elasticsearchCommandDrainErrors.WithLabelValues(metrics.ElasticsearchStatusCode(err)).Inc()
 		return err
 	}
 
@@ -108,24 +93,22 @@ func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string
 	settingsMap := settings.Map()
 	body := map[string]map[string]*string{"transient": settingsMap}
 	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(body).Do(ctx)
-	if err != nil {
-		elasticsearchCommandDrainErrors.WithLabelValues(metrics.ElasticsearchStatusCode(err)).Inc()
-	}
-	return err
+	return
 }
 
 // Undrain reverses Drain.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName string) error {
+func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName string) (err error) {
+	timer := metrics.NewVecTimer(ElasticsearchCommandUndrainDuration)
+	defer timer.ObserveErr(err)
+
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 
-	timer := prometheus.NewTimer(elasticsearchCommandUndrainDuration)
-	defer timer.ObserveDuration()
-	resp, err := es.NewClusterGetSettingsService(s.client).Do(ctx)
+	var resp *es.ClusterGetSettingsResponse
+	resp, err = es.NewClusterGetSettingsService(s.client).Do(ctx)
 	if err != nil {
-		elasticsearchCommandUndrainErrors.WithLabelValues(metrics.ElasticsearchStatusCode(err)).Inc()
 		return err
 	}
 
@@ -147,9 +130,6 @@ func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName stri
 	settingsMap := settings.Map()
 	body := map[string]map[string]*string{"transient": settingsMap}
 	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(body).Do(ctx)
-	if err != nil {
-		elasticsearchCommandUndrainErrors.WithLabelValues(metrics.ElasticsearchStatusCode(err)).Inc()
-	}
 	return err
 }
 
