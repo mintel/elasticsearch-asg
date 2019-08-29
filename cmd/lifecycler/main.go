@@ -93,13 +93,10 @@ func main() {
 	}
 	conf := aws.NewConfig().WithRegion(region).WithMaxRetries(awsMaxRetries)
 	sess := session.Must(session.NewSession(conf))
-	if *cmd.VerboseFlag {
-		// If verbose mode is on, add Prometheus metrics for AWS API call duration and errors.
-		prometheus.WrapRegistererWithPrefix(
-			prometheus.BuildFQName(metrics.Namespace, "", subsystem),
-			prometheus.DefaultRegisterer,
-		).MustRegister(metrics.InstrumentAWS(&sess.Handlers, nil)...) // TODO: Define better buckets.
-	}
+	prometheus.WrapRegistererWithPrefix(
+		prometheus.BuildFQName(metrics.Namespace, "", subsystem),
+		prometheus.DefaultRegisterer,
+	).MustRegister(metrics.InstrumentAWS(&sess.Handlers, nil)...) // TODO: Define better buckets.
 	asClient := autoscaling.New(sess)
 	sqsClient := sqs.New(sess)
 
