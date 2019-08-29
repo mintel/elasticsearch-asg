@@ -111,25 +111,20 @@ func main() {
 	health.AddLivenessCheck("up", func() error {
 		return nil
 	})
-	var loopErr error
-	health.AddReadinessCheck("noerror", func() error {
-		return loopErr
-	})
 
 	// Serve health checks and Prometheus metrics.
 	go func() {
 		http.Handle(*metricsPath, promhttp.Handler())
 		http.HandleFunc("/live", health.LiveEndpoint)
-		http.HandleFunc("/ready", health.ReadyEndpoint)
 		if err := http.ListenAndServe(*metricsListen, nil); err != nil {
 			logger.Fatal("error serving metrics", zap.Error(err))
 		}
 	}()
 
 	for nextSnapshot := snapshotSchedule.Next(); ; nextSnapshot = snapshotSchedule.Next() {
-		timer := prometheus.NewTimer(loopDurationSleep)
-		time.Sleep(time.Until(nextSnapshot)) // Wait to start the snapshot
-		timer.ObserveDuration()
+		sleepTime := time.Until(nextSnapshot)
+		time.Sleep(sleepTime) // Wait to start the snapshot
+		loopDurationSleep.Observe(sleepTime.Seconds())
 
 		// Start a goroutine to create/delete snapshots.
 		// Accoring to https://www.elastic.co/guide/en/elasticsearch/reference/7.0/modules-snapshots.html
