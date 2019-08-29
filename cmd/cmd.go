@@ -8,7 +8,9 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line args parser
 )
 
-var verboseFlag = kingpin.Flag("verbose", "Show debug logging.").Short('v').Bool()
+// VerboseFlag is a flag indicating increased logging/information should be output.
+// It is added automatically by importing this package.
+var VerboseFlag = kingpin.Flag("verbose", "Show debug logging.").Short('v').Bool()
 
 // SetupLogging sets up zap logging.
 func SetupLogging() *zap.Logger {
@@ -20,7 +22,7 @@ func SetupLogging() *zap.Logger {
 		conf = zap.NewProductionConfig()
 	}
 	// If the --verbose flag is set, log at the debug level.
-	if *verboseFlag {
+	if *VerboseFlag {
 		conf.Level.SetLevel(zap.DebugLevel)
 	}
 	logger, err := conf.Build() // Convert logging config to logger.
