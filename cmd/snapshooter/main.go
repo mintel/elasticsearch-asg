@@ -13,7 +13,7 @@ import (
 
 // SnapshotFormat is the format for snapshot names (time.Time.Format()).
 // Elasticsearch snapshot names may not contain spaces.
-const SnapshotFormat = "2006-01-02-15-04-05"
+const SnapshotFormat = "snapshooter-2006-01-02t15-04-05"
 
 // defaultURL is the default Elasticsearch URL.
 const defaultURL = "http://localhost:9200"
@@ -168,6 +168,9 @@ func deleteOldSnapshots(ctx context.Context, client *elastic.Client, repoName st
 		return err
 	}
 	for _, s := range resp.Snapshots {
+		if !strings.HasPrefix(s.Snapshot, "snapshooter-") {
+			continue
+		}
 		t, err := time.Parse(SnapshotFormat, s.Snapshot)
 		if err != nil {
 			logger.Fatal("error parsing time from snapshot name",

@@ -147,14 +147,6 @@ func TestSnapshotWindows_Keep(t *testing.T) {
 	}
 }
 
-func TestSnapshotFormat(t *testing.T) {
-	want := time.Date(2019, time.May, 5, 5, 26, 13, 0, time.UTC)
-	got, err := time.Parse(SnapshotFormat, "2019-05-05-05-26-13")
-	if assert.NoError(t, err) {
-		assert.WithinDuration(t, want, got, 0)
-	}
-}
-
 func windowsFromStrings(s ...string) SnapshotWindows {
 	var windows SnapshotWindows
 	for i := 0; i < len(s); i += 2 {
