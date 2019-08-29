@@ -12,6 +12,7 @@ import (
 	"github.com/tidwall/gjson" // Just-In-Time JSON parsing
 	"go.uber.org/zap"          // Logging
 
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"  // Logger from context
 	"github.com/mintel/elasticsearch-asg/pkg/es"      // Elasticsearch client extensions
 	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
 )
@@ -44,7 +45,6 @@ var (
 // ElasticsearchCommandService implements methods that write to Elasticsearch endpoints.
 type ElasticsearchCommandService struct {
 	client     *elastic.Client
-	logger     *zap.Logger
 	settingsMu sync.Mutex // Elasticsearch doesn't provide an atomic way to modify settings
 }
 
@@ -52,7 +52,6 @@ type ElasticsearchCommandService struct {
 func NewElasticsearchCommandService(client *elastic.Client) *ElasticsearchCommandService {
 	return &ElasticsearchCommandService{
 		client: client,
-		logger: zap.L().Named("ElasticsearchCommandService"),
 	}
 }
 
@@ -64,12 +63,16 @@ func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string
 	timer := metrics.NewVecTimer(ElasticsearchCommandDrainDuration)
 	defer timer.ObserveErr(err)
 
+	logger := ctxlog.L(ctx).Named("ElasticsearchCommandService.Drain").With(zap.String("node_name", nodeName))
+
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 
+	logger.Debug("getting Elasticsearch settings")
 	var resp *es.ClusterGetSettingsResponse
 	resp, err = es.NewClusterGetSettingsService(s.client).Do(ctx)
 	if err != nil {
+		logger.Error("error getting Elasticsearch settings", zap.Error(err))
 		return err
 	}
 
@@ -77,6 +80,7 @@ func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string
 	sort.Strings(settings.Name)
 	i := sort.SearchStrings(settings.Name, nodeName)            // Index in sorted slice where nodeName should be.
 	if i < len(settings.Name) && settings.Name[i] == nodeName { // Node is already excluded from allocation.
+		logger.Debug("node already excluded from shard allocation")
 		return nil
 	}
 	// Insert nodeName into slice (https://github.com/golang/go/wiki/SliceTricks#insert)
@@ -93,6 +97,11 @@ func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string
 	settingsMap := settings.Map()
 	body := map[string]map[string]*string{"transient": settingsMap}
 	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(body).Do(ctx)
+	if err != nil {
+		logger.Error("error putting Elasticsearch settings", zap.Error(err))
+	} else {
+		logger.Debug("finished putting Elasticsearch settings", zap.Error(err))
+	}
 	return
 }
 
@@ -103,12 +112,16 @@ func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName stri
 	timer := metrics.NewVecTimer(ElasticsearchCommandUndrainDuration)
 	defer timer.ObserveErr(err)
 
+	logger := ctxlog.L(ctx).Named("ElasticsearchCommandService.Undrain").With(zap.String("node_name", nodeName))
+
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 
+	logger.Debug("getting Elasticsearch settings")
 	var resp *es.ClusterGetSettingsResponse
 	resp, err = es.NewClusterGetSettingsService(s.client).Do(ctx)
 	if err != nil {
+		logger.Error("error getting Elasticsearch settings", zap.Error(err))
 		return err
 	}
 
@@ -116,6 +129,7 @@ func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName stri
 	sort.Strings(settings.Name)
 	i := sort.SearchStrings(settings.Name, nodeName)             // Index in sorted slice where nodeName should be.
 	if i == len(settings.Name) || settings.Name[i] != nodeName { // Node is already not in the shard allocation exclusion list.
+		logger.Debug("node already allowed for shard allocation")
 		return nil
 	}
 	// Remove nodeName from slice (https://github.com/golang/go/wiki/SliceTricks#delete)
@@ -130,6 +144,11 @@ func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName stri
 	settingsMap := settings.Map()
 	body := map[string]map[string]*string{"transient": settingsMap}
 	_, err = es.NewClusterPutSettingsService(s.client).BodyJSON(body).Do(ctx)
+	if err != nil {
+		logger.Error("error putting Elasticsearch settings", zap.Error(err))
+	} else {
+		logger.Debug("finished putting Elasticsearch settings", zap.Error(err))
+	}
 	return err
 }
 

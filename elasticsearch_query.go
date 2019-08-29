@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap" // Logging
 
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"  // Logger from context
 	"github.com/mintel/elasticsearch-asg/pkg/es"      // Elasticsearch client extensions
 	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
 	"github.com/mintel/elasticsearch-asg/pkg/str"     // String utilities
@@ -45,14 +46,12 @@ var (
 // ElasticsearchQueryService implements methods that read from Elasticsearch endpoints.
 type ElasticsearchQueryService struct {
 	client *elastic.Client
-	logger *zap.Logger
 }
 
 // NewElasticsearchQueryService returns a new ElasticsearchQueryService.
 func NewElasticsearchQueryService(client *elastic.Client) *ElasticsearchQueryService {
 	return &ElasticsearchQueryService{
 		client: client,
-		logger: zap.L().Named("ElasticsearchQueryService"),
 	}
 }
 
@@ -60,12 +59,16 @@ func NewElasticsearchQueryService(client *elastic.Client) *ElasticsearchQuerySer
 func (s *ElasticsearchQueryService) ClusterName(ctx context.Context) (name string, err error) {
 	timer := metrics.NewVecTimer(ElasticsearchQueryClusterNameDuration)
 	defer timer.ObserveErr(err)
+	logger := ctxlog.L(ctx).Named("ElasticsearchQueryService.ClusterName")
+	logger.Debug("getting cluster name")
 	var resp *elastic.ClusterHealthResponse
 	resp, err = s.client.ClusterHealth().Do(ctx)
 	if err != nil {
+		logger.Error("error getting cluster name", zap.Error(err))
 		return
 	}
 	name = resp.ClusterName
+	logger.Debug("got cluster name", zap.String("cluster", name))
 	return
 }
 
@@ -74,6 +77,7 @@ func (s *ElasticsearchQueryService) ClusterName(ctx context.Context) (name strin
 func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (node *Node, err error) {
 	timer := metrics.NewVecTimer(ElasticsearchQueryNodesDuration)
 	defer timer.ObserveErr(err)
+	ctx = ctxlog.WithName(ctx, "ElasticsearchQueryService.Node")
 	var nodes map[string]*Node
 	nodes, err = s.nodes(ctx, name)
 	if err != nil {
@@ -90,12 +94,14 @@ func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (node
 func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) (nodes map[string]*Node, err error) {
 	timer := metrics.NewVecTimer(ElasticsearchQueryNodesDuration)
 	defer timer.ObserveErr(err)
-
+	ctx = ctxlog.WithName(ctx, "ElasticsearchQueryService.Nodes")
 	nodes, err = s.nodes(ctx, names...)
 	return
 }
 
 func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
+	logger := ctxlog.L(ctx).Named("ElasticsearchQueryService.ClusterName")
+
 	// We collect information from 4 Elasticsearch endpoints.
 	// The requests are send concurrently by separate goroutines.
 	var statsResp *elastic.NodesStatsResponse    // Node stats
@@ -119,9 +125,13 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 	go func() {
 		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
+		logger.Debug("getting nodes stats")
 		statsResp, err = s.client.NodesStats().NodeId(names...).Do(ctx)
 		if err != nil {
+			logger.Error("error getting nodes stats", zap.Error(err))
 			errc <- err
+		} else {
+			logger.Debug("got nodes stats", zap.Int("count", len(statsResp.Nodes)))
 		}
 	}()
 
@@ -129,9 +139,13 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 	go func() {
 		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
+		logger.Debug("getting nodes info")
 		infoResp, err = s.client.NodesInfo().NodeId(names...).Do(ctx)
 		if err != nil {
+			logger.Error("error getting nodes info", zap.Error(err))
 			errc <- err
+		} else {
+			logger.Debug("got nodes info", zap.Int("count", len(infoResp.Nodes)))
 		}
 	}()
 
@@ -139,17 +153,23 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 	go func() {
 		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
+		logger.Debug("getting shards info")
 		shardsResp, err = es.NewCatShardsService(s.client).Do(ctx)
 		if err != nil {
+			logger.Error("error getting shards info", zap.Error(err))
 			errc <- err
+		} else {
+			logger.Debug("got shards info", zap.Int("count", len(shardsResp)))
 		}
 	}()
 
 	// Get cluster settings
 	go func() {
 		defer wg.Done() // Decrement goroutine counter on goroutine end.
+		logger.Debug("getting cluster settings")
 		resp, err := es.NewClusterGetSettingsService(s.client).FilterPath("*." + shardAllocExcludeSetting + ".*").Do(ctx)
 		if err != nil {
+			logger.Error("error getting cluster settings", zap.Error(err))
 			errc <- err
 			return
 		}
@@ -169,6 +189,7 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 				settings.Attr[k] = v
 			}
 		}
+		logger.Debug("got cluster settings")
 	}()
 
 	// Wait for an error, or all the goroutines to finish.
@@ -189,7 +210,7 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 		for name := range infoResp.Nodes {
 			infoNodes = append(infoNodes, name)
 		}
-		zap.L().Error("got info and stats responses of different lengths",
+		logger.Error("got info and stats responses of different lengths",
 			zap.Strings("stats_nodes", statsNodes),
 			zap.Strings("info_nodes", infoNodes),
 		)
@@ -222,7 +243,7 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 			for name := range nodes {
 				nodeNames = append(nodeNames, name)
 			}
-			zap.L().Error("got node in stats response that isn't in info response",
+			logger.Error("got node in stats response that isn't in info response",
 				zap.String("name", ns.Name),
 				zap.Strings("nodes", nodeNames),
 			)
@@ -233,7 +254,7 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 	for _, sr := range shardsResp {
 		shardNodes, err := parseShardNodes(sr.Node)
 		if err != nil {
-			zap.L().Error(err.Error(), zap.String("name", sr.Node))
+			logger.Error(err.Error(), zap.String("name", sr.Node))
 			return nil, err
 		} else if len(shardNodes) == 0 {
 			// Unassigned shard. Ignore.
@@ -247,7 +268,7 @@ func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) 
 				for name := range nodes {
 					nodeNames = append(nodeNames, name)
 				}
-				zap.L().Error("got node in shards response that isn't in info or stats response",
+				logger.Error("got node in shards response that isn't in info or stats response",
 					zap.String("name", node),
 					zap.Strings("nodes", nodeNames),
 				)
