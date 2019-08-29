@@ -48,7 +48,7 @@ var ( // Make these variables, not constants, so they can be changed during test
 	sendVisRandomizationFactor = 0.05
 )
 
-const subsystem = "sqs"
+const subsystem = "squeues"
 
 var (
 	// Up is a Prometheus metrics tracking number of running SQS's.
@@ -60,69 +60,45 @@ var (
 	})
 
 	// ReceiveDuration is a Prometheus metrics tracking duration of receiving messages from AWS SQS.
-	ReceiveDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+	ReceiveDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: subsystem,
 		Name:      "receive_duration_seconds",
 		Help:      "Duration receiving SQS messages.",
-		Buckets:   prometheus.DefBuckets,
-	})
-	// ReceiveErrors is a Prometheus metrics tracking count of errors receiving messages from AWS SQS.
-	ReceiveErrors = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: metrics.Namespace,
-		Subsystem: subsystem,
-		Name:      "receive_errors_total",
-		Help:      "Count of errors receiving SQS messages.",
-	})
+		Buckets:   prometheus.DefBuckets, // TODO: Define better buckets
+	}, []string{metrics.LabelStatus})
 
 	// HandleDuration is a Prometheus metrics tracking duration handling SQS messages.
-	HandleDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+	HandleDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: subsystem,
 		Name:      "handle_duration_seconds",
 		Help:      "Duration running SQS message handlers.",
-		Buckets:   prometheus.DefBuckets,
-	})
-	// HandleErrors is a Prometheus metrics tracking count of errors handling SQS messages.
-	HandleErrors = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: metrics.Namespace,
-		Subsystem: subsystem,
-		Name:      "handle_errors_total",
-		Help:      "Count of errors running SQS message handlers.",
-	})
+		Buckets:   prometheus.DefBuckets, // TODO: Define better buckets
+	}, []string{metrics.LabelStatus})
 
 	// UpdateTimeoutDuration is a Prometheus metrics tracking duration updating SQS messages visibility timeout.
-	UpdateTimeoutDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+	UpdateTimeoutDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: subsystem,
 		Name:      "update_timeout_duration_seconds",
 		Help:      "Duration updating SQS message visibility timeouts.",
-		Buckets:   prometheus.DefBuckets,
-	})
-	// UpdateTimeoutErrors is a Prometheus metrics tracking count of errors updating SQS messages visibility timeout.
-	UpdateTimeoutErrors = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: metrics.Namespace,
-		Subsystem: subsystem,
-		Name:      "update_timeout_errors_total",
-		Help:      "Count of errors updating SQS message visibility timeouts.",
-	})
+		Buckets:   prometheus.DefBuckets, // TODO: Define better buckets
+	}, []string{metrics.LabelStatus})
 
 	// DeleteDuration is a Prometheus metrics tracking duration deleting SQS messages.
-	DeleteDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+	DeleteDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: subsystem,
 		Name:      "delete_duration_seconds",
 		Help:      "Duration deleting SQS messages.",
-		Buckets:   prometheus.DefBuckets,
-	})
-	// DeleteErrors is a Prometheus metrics tracking count of errors deleting SQS messages.
-	DeleteErrors = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: metrics.Namespace,
-		Subsystem: subsystem,
-		Name:      "delete_errors_total",
-		Help:      "Count of errors deleting SQS messages.",
-	})
+		Buckets:   prometheus.DefBuckets, // TODO: Define better buckets
+	}, []string{metrics.LabelStatus})
 )
+
+func init() {
+	Up.Set(0)
+}
 
 // ceilSeconds rounds a duration up to the nearest second.
 func ceilSeconds(d time.Duration) time.Duration {
@@ -280,11 +256,10 @@ func (q *Dispatcher) RunWithContext(ctx context.Context, handler Handler) error 
 				wg.Add(1)
 				go func(m *sqs.Message) {
 					defer wg.Done()
-					timer := prometheus.NewTimer(HandleDuration)
+					timer := metrics.NewVecTimer(HandleDuration)
 					err := handler.Handle(ctx, m)
-					timer.ObserveDuration()
+					timer.ObserveErr(err)
 					if abortIfErr(err) {
-						HandleErrors.Inc()
 						select {
 						case doDeleteMessage <- *m.ReceiptHandle:
 						case <-ctx.Done(): // Don't block if ctx is canceled.
@@ -344,48 +319,41 @@ func (q *Dispatcher) RunWithContext(ctx context.Context, handler Handler) error 
 
 // receiveMessages receives up to numMessages from the AWS SQS queue.
 func (q *Dispatcher) receiveMessages(ctx context.Context, numMessages int) ([]*sqs.Message, error) {
-	timer := prometheus.NewTimer(ReceiveDuration)
-	defer timer.ObserveDuration()
+	timer := metrics.NewVecTimer(ReceiveDuration)
 	resp, err := q.client.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(q.queueURL),
 		MaxNumberOfMessages: aws.Int64(int64(numMessages)),
 		VisibilityTimeout:   aws.Int64(numSeconds(ceilSeconds(q.InitialVisibilityTimeout))),
 		WaitTimeSeconds:     aws.Int64(numSeconds(q.PollTime)),
 	})
+	timer.ObserveErr(err)
 	if err != nil {
-		ReceiveErrors.Inc()
 		return nil, err
 	}
 	return resp.Messages, nil
 }
 
 func (q *Dispatcher) deleteMessage(ctx context.Context, receiptHandle string) error {
-	timer := prometheus.NewTimer(DeleteDuration)
-	defer timer.ObserveDuration()
+	timer := metrics.NewVecTimer(DeleteDuration)
 	_, err := q.client.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(q.queueURL),
 		ReceiptHandle: aws.String(receiptHandle),
 	})
-	if err != nil {
-		DeleteErrors.Inc()
-	}
+	timer.ObserveErr(err)
 	return err
 }
 
 // updateMessageVisibility updates the message visibility timeout for
 // the AWS SQS message specified by receiptHandle to d (rounded up to the nearest second).
 func (q *Dispatcher) updateMessageVisibility(ctx context.Context, receiptHandle string, d time.Duration) error {
+	timer := metrics.NewVecTimer(UpdateTimeoutDuration)
 	visibilityTimeout := numSeconds(ceilSeconds(d))
-	timer := prometheus.NewTimer(UpdateTimeoutDuration)
-	defer timer.ObserveDuration()
 	_, err := q.client.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
 		QueueUrl:          aws.String(q.queueURL),
 		ReceiptHandle:     aws.String(receiptHandle),
 		VisibilityTimeout: aws.Int64(visibilityTimeout),
 	})
-	if err != nil {
-		UpdateTimeoutErrors.Inc()
-	}
+	timer.ObserveErr(err)
 	return err
 }
 
