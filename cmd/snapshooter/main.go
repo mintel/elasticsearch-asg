@@ -15,8 +15,8 @@ import (
 	"go.uber.org/zap"                        // Logging
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line args parser
 
-	"github.com/mintel/elasticsearch-asg/cmd"     // Common logging setup func
-	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/cmd"         // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
 )
 
 // SnapshotFormat is the format for snapshot names (time.Time.Format()).

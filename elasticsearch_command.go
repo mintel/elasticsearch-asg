@@ -12,8 +12,8 @@ import (
 	"github.com/tidwall/gjson" // Just-In-Time JSON parsing
 	"go.uber.org/zap"          // Logging
 
-	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
-	"github.com/mintel/elasticsearch-asg/pkg/es"  // Elasticsearch client extensions
+	"github.com/mintel/elasticsearch-asg/pkg/es"      // Elasticsearch client extensions
+	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
 )
 
 const (

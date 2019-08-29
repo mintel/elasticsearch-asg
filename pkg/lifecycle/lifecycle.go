@@ -20,7 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 
-	"github.com/mintel/elasticsearch-asg/metrics"
+	"github.com/mintel/elasticsearch-asg/pkg/metrics"
 )
 
 const subsystem = "lifecycle"

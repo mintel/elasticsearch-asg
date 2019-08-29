@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
-	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
 )
 
 // Cache EC2 instance ID => int count of vcpu cores.

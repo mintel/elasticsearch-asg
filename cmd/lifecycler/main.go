@@ -27,9 +27,9 @@ import (
 
 	esasg "github.com/mintel/elasticsearch-asg"         // Complex Elasticsearch services
 	"github.com/mintel/elasticsearch-asg/cmd"           // Common logging setup func
-	"github.com/mintel/elasticsearch-asg/metrics"       // Prometheus metrics
 	"github.com/mintel/elasticsearch-asg/pkg/es"        // Elasticsearch client extensions
 	"github.com/mintel/elasticsearch-asg/pkg/lifecycle" // Handle AWS Autoscaling Group lifecycle hook event messages.
+	"github.com/mintel/elasticsearch-asg/pkg/metrics"   // Prometheus metrics
 	"github.com/mintel/elasticsearch-asg/pkg/squeues"   // SQS message dispatcher
 )
 

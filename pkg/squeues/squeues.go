@@ -15,7 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 
-	"github.com/mintel/elasticsearch-asg/metrics"
+	"github.com/mintel/elasticsearch-asg/pkg/metrics"
 )
 
 // maxMessages is the max number of message that can be received from SQS at once.

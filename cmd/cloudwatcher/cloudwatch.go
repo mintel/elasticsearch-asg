@@ -20,9 +20,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 
-	esasg "github.com/mintel/elasticsearch-asg"   // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
-	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
+	esasg "github.com/mintel/elasticsearch-asg"       // Complex Elasticsearch services
+	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/str"     // String utilities
 )
 
 var (

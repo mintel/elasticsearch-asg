@@ -11,9 +11,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap" // Logging
 
-	"github.com/mintel/elasticsearch-asg/metrics" // Prometheus metrics
-	"github.com/mintel/elasticsearch-asg/pkg/es"  // Elasticsearch client extensions
-	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
+	"github.com/mintel/elasticsearch-asg/pkg/es"      // Elasticsearch client extensions
+	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/str"     // String utilities
 )
 
 // ErrInconsistentNodes is returned when ElasticsearchQueryService.Nodes()

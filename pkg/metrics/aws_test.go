@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	metricmocks "github.com/mintel/elasticsearch-asg/metrics/mocks"
+	metricmocks "github.com/mintel/elasticsearch-asg/pkg/metrics/mocks"
 )
 
 func TestInstrumentAWSDuration(t *testing.T) {
