@@ -26,24 +26,11 @@ const SnapshotFormat = "snapshooter-2006-01-02t15-04-05"
 const subsystem = "snapshooter"
 
 var (
-	// USE - loop timing
-	//  - Utilization: ratio of active vs sleep time.
-	//  - Saturation: count of missed snapshots.
-	//  - Errors: count of errors during mainloop.
-
-	// RED - client requests
-	//  - Rate:
-	//  - Error:
-	//  - Duration:
-
-	// Four Golden Signals
-	//  - Latency (time taken to serve a request)
-	//  - Traffic (how much demand is placed on your system)
-	//  - Errors (rate of requests that are failing)
-	//  - Saturation (how “full” your service is)
-
 	// loopDuration tracks the duration of main loop of snapshooter.
 	// It has a label `status` which is one of "success", "error", or "sleep".
+	// Alerts should be implemented to make sure the duration of sleep does
+	// not approach zero, as this would indicate that the process of creating/deleting
+	// snapshots is taking too long.
 	loopDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: subsystem,
