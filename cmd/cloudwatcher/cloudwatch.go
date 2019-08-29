@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 
+	"go.uber.org/zap"
+
 	esasg "github.com/mintel/elasticsearch-asg"   // Complex Elasticsearch services
 	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
 )
