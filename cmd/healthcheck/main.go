@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -49,20 +50,22 @@ func main() {
 		}()
 	}()
 
+	ctx := context.Background()
+
 	// Create a HTTP handler that runs the healthchecks.
 	atLeastOne := false // At least one healthcheck is enabled.
 	checks := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, *namespace)
 	if !*disableCheckHead {
 		atLeastOne = true
-		checks.AddLivenessCheck("HEAD", eshealth.CheckLiveHEAD((*esURL).String()))
+		checks.AddLivenessCheck("HEAD", eshealth.CheckLiveHEAD(ctx, (*esURL).String()))
 	}
 	if !*disableCheckJoined {
 		atLeastOne = true
-		checks.AddReadinessCheck("joined-cluster", eshealth.CheckReadyJoinedCluster((*esURL).String()))
+		checks.AddReadinessCheck("joined-cluster", eshealth.CheckReadyJoinedCluster(ctx, (*esURL).String()))
 	}
 	if !*disableCheckRollingUpgrade {
 		atLeastOne = true
-		checks.AddReadinessCheck("rolling-upgrade", eshealth.CheckReadyRollingUpgrade((*esURL).String()))
+		checks.AddReadinessCheck("rolling-upgrade", eshealth.CheckReadyRollingUpgrade(ctx, (*esURL).String()))
 	}
 	if !atLeastOne {
 		logger.Fatal("No health checks enabled")

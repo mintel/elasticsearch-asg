@@ -12,11 +12,11 @@ import (
 )
 
 func TestCheckReadyRollingUpgrade_passing(t *testing.T) {
-	u, teardown := setup(t)
+	ctx, u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-	check := CheckReadyRollingUpgrade(u)
+	check := CheckReadyRollingUpgrade(ctx, u)
 
 	const (
 		thisNode = "ce35b16d58ef"
@@ -120,11 +120,11 @@ func TestCheckReadyRollingUpgrade_passing(t *testing.T) {
 }
 
 func TestCheckReadyRollingUpgrade_error(t *testing.T) {
-	u, teardown := setup(t)
+	ctx, u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-	check := CheckReadyRollingUpgrade(u)
+	check := CheckReadyRollingUpgrade(ctx, u)
 	gock.New(u).
 		Get("/_nodes/_local/info").
 		Reply(http.StatusInternalServerError).

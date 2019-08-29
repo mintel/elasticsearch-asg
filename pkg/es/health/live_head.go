@@ -8,20 +8,22 @@ import (
 	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
 	elastic "github.com/olivere/elastic/v7"           // Elasticsearch client
 	"go.uber.org/zap"                                 // Logging
+
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog" // Logger from context
 )
 
 // CheckLiveHEAD checks if a HEAD request to / returns 200.
-func CheckLiveHEAD(URL string) healthcheck.Check {
+func CheckLiveHEAD(ctx context.Context, URL string) healthcheck.Check {
 	lc := lazyClient{
 		URL: URL,
 	}
 	return func() error {
-		logger := zap.L().Named("CheckLiveHEAD")
+		logger := ctxlog.L(ctx).Named("CheckLiveHEAD")
 		client, err := lc.Client()
 		if err != nil {
 			return err
 		}
-		resp, err := client.PerformRequest(context.Background(), elastic.PerformRequestOptions{
+		resp, err := client.PerformRequest(ctx, elastic.PerformRequestOptions{
 			Method: "HEAD",
 			Path:   "/",
 		})

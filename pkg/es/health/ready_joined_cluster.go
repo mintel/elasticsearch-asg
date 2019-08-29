@@ -6,22 +6,24 @@ import (
 
 	"github.com/heptiolabs/healthcheck" // Healthchecks framework
 	"go.uber.org/zap"                   // Logging
+
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog" // Logger from context
 )
 
 // CheckReadyJoinedCluster checks if a Elasticsearch node has joined a cluster.
-func CheckReadyJoinedCluster(url string) healthcheck.Check {
+func CheckReadyJoinedCluster(ctx context.Context, url string) healthcheck.Check {
 	lc := lazyClient{
 		URL: url,
 	}
 	return func() error {
-		logger := zap.L().Named("CheckReadyJoinedCluster")
+		logger := ctxlog.L(ctx).Named("CheckReadyJoinedCluster")
 		client, err := lc.Client()
 		if err != nil {
 			return err
 		}
-		resp, err := client.ClusterState().Do(context.Background())
+		resp, err := client.ClusterState().Do(ctx)
 		if err != nil {
-			zap.L().Info("error getting cluster state", zap.Error(err))
+			logger.Error("error getting cluster state", zap.Error(err))
 			return err
 		}
 

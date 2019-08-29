@@ -8,7 +8,8 @@ import (
 	"github.com/heptiolabs/healthcheck" // Healthchecks framework
 	"go.uber.org/zap"                   // Logging
 
-	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog" // Logger from context
+	"github.com/mintel/elasticsearch-asg/pkg/es"     // Extensions to the Elasticsearch client
 )
 
 // CheckReadyRollingUpgrade checks that Elasticsearch has recovered from a rolling upgrade.
@@ -31,7 +32,7 @@ import (
 // After the check passes for the first time, it will always pass on every subsequent call.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/rolling-upgrades.html
-func CheckReadyRollingUpgrade(url string) healthcheck.Check {
+func CheckReadyRollingUpgrade(ctx context.Context, url string) healthcheck.Check {
 	var nodeName string
 	var initialShards []string
 	doneOnce := false // disable after first success
@@ -39,7 +40,7 @@ func CheckReadyRollingUpgrade(url string) healthcheck.Check {
 		URL: url,
 	}
 	return func() error {
-		logger := zap.L().Named("CheckReadyRollingUpgrade")
+		logger := ctxlog.L(ctx).Named("CheckReadyRollingUpgrade")
 
 		if doneOnce {
 			logger.Debug("disabled due to doneOnce = true")
@@ -52,7 +53,7 @@ func CheckReadyRollingUpgrade(url string) healthcheck.Check {
 		}
 
 		if nodeName == "" {
-			info, err := client.NodesInfo().NodeId("_local").Metric("info").Do(context.Background())
+			info, err := client.NodesInfo().NodeId("_local").Metric("info").Do(ctx)
 			if err != nil {
 				logger.Info("error getting node info", zap.Error(err))
 				return err
@@ -66,7 +67,7 @@ func CheckReadyRollingUpgrade(url string) healthcheck.Check {
 			}
 		}
 
-		shards, err := es.NewCatShardsService(client).Do(context.Background())
+		shards, err := es.NewCatShardsService(client).Do(ctx)
 		if err != nil {
 			logger.Info("error getting cluster shards", zap.Error(err))
 			return err

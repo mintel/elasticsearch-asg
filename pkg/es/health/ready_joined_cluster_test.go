@@ -10,11 +10,11 @@ import (
 )
 
 func TestCheckReadyJoinedCluster_passing(t *testing.T) {
-	u, teardown := setup(t)
+	ctx, u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-	check := CheckReadyJoinedCluster(u)
+	check := CheckReadyJoinedCluster(ctx, u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").
 		Reply(http.StatusOK).
@@ -29,11 +29,11 @@ func TestCheckReadyJoinedCluster_passing(t *testing.T) {
 }
 
 func TestCheckReadyJoinedCluster_error(t *testing.T) {
-	u, teardown := setup(t)
+	ctx, u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-	check := CheckReadyJoinedCluster(u)
+	check := CheckReadyJoinedCluster(ctx, u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").
 		Reply(http.StatusInternalServerError).
@@ -44,11 +44,11 @@ func TestCheckReadyJoinedCluster_error(t *testing.T) {
 }
 
 func TestCheckReadyJoinedCluster_not_joined(t *testing.T) {
-	u, teardown := setup(t)
+	ctx, u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-	check := CheckReadyJoinedCluster(u)
+	check := CheckReadyJoinedCluster(ctx, u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").
 		Reply(http.StatusOK).

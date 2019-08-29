@@ -9,11 +9,11 @@ import (
 )
 
 func TestCheckLiveHEAD_passing(t *testing.T) {
-	u, teardown := setup(t)
+	ctx, u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-	check := CheckLiveHEAD(u)
+	check := CheckLiveHEAD(ctx, u)
 	gock.New(u).
 		Head("/").
 		Reply(http.StatusOK)
@@ -23,11 +23,11 @@ func TestCheckLiveHEAD_passing(t *testing.T) {
 }
 
 func TestCheckLiveHEAD_error(t *testing.T) {
-	u, teardown := setup(t)
+	ctx, u, teardown := setup(t)
 	defer teardown()
 	defer gock.Off()
 	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-	check := CheckLiveHEAD(u)
+	check := CheckLiveHEAD(ctx, u)
 	gock.New(u).
 		Head("/").
 		Reply(http.StatusInternalServerError).
