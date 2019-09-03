@@ -261,3 +261,51 @@ func TestCommand_DeleteSnapshot(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, gock.IsDone())
 }
+
+func TestCommand_ExcludeFromVoting(t *testing.T) {
+	gock.Intercept()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+
+	u, teardown := setup(t)
+	defer teardown()
+
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	if err != nil {
+		t.Fatalf("couldn't create elastic client: %s", err)
+	}
+	cmd := NewCommand(esClient)
+
+	const nodeName = "node1"
+
+	gock.New(u).
+		Post(fmt.Sprintf("/_cluster/voting_config_exclusions/%s", nodeName)).
+		Reply(http.StatusOK).
+		JSON(b{"acknowledged": true})
+	err = cmd.ExcludeFromVoting(context.Background(), nodeName)
+	assert.NoError(t, err)
+	assert.True(t, gock.IsDone())
+}
+
+func TestCommand_ClearVotingExclusions(t *testing.T) {
+	gock.Intercept()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+
+	u, teardown := setup(t)
+	defer teardown()
+
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	if err != nil {
+		t.Fatalf("couldn't create elastic client: %s", err)
+	}
+	cmd := NewCommand(esClient)
+
+	gock.New(u).
+		Delete("_cluster/voting_config_exclusions").
+		Reply(http.StatusOK).
+		JSON(b{"acknowledged": true})
+	err = cmd.ClearVotingExclusions(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, gock.IsDone())
+}

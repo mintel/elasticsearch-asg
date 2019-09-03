@@ -208,7 +208,7 @@ func main() {
 			if n.IsMaster() { // Has "master" role.
 				logger.Debug("setting master voting exclusion")
 				votingLock.Lock()
-				if _, err := es.NewClusterPostVotingConfigExclusion(esClient).Node(n.Name).Do(ctx); err != nil {
+				if err := esCmd.ExcludeFromVoting(ctx, n.Name); err != nil {
 					votingLock.Unlock()
 					return err
 				}
@@ -221,7 +221,7 @@ func main() {
 					// lifecycle event currently being handled.
 					if atomic.AddInt32(&votingCount, -1) == 0 {
 						logger.Debug("clearing voting exclusion configuration")
-						if _, err := es.NewClusterDeleteVotingConfigExclusion(esClient).Do(ctx); err != nil {
+						if err := esCmd.ClearVotingExclusions(ctx); err != nil {
 							logger.Fatal("error clearing voting exclusion configuration", zap.Error(err))
 						}
 					}

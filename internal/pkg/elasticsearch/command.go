@@ -73,12 +73,31 @@ var (
 		Help:      "Duration while deleting an Elasticsearch snapshot.",
 		Buckets:   prometheus.DefBuckets,
 	}, []string{metrics.LabelStatus})
+
+	// CommandExcludeFromVotingDuration is the Prometheus metric for Command.ExcludeFromVoting() durations.
+	CommandExcludeFromVotingDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: commandSubsystem,
+		Name:      "exclude_from_voting_request_duration_seconds",
+		Help:      "Duration while excluding an Elasticsearch master node from voting.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{metrics.LabelStatus})
+
+	// CommandClearVotingExclusionsDuration is the Prometheus metric for Command.ClearVotingExclusions() durations.
+	CommandClearVotingExclusionsDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: commandSubsystem,
+		Name:      "clear_voting_exclusions_request_duration_seconds",
+		Help:      "Duration while clearing Elasticsearch master node voting exclusions.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{metrics.LabelStatus})
 )
 
 // Command implements methods that write to Elasticsearch endpoints.
 type Command struct {
-	client     *elastic.Client
-	settingsMu sync.Mutex // Elasticsearch doesn't provide an atomic way to modify settings
+	client            *elastic.Client
+	settingsMu        sync.Mutex // Elasticsearch doesn't provide an atomic way to modify settings
+	votingExclusionMu sync.Mutex
 }
 
 // NewCommand returns a new Command.
@@ -270,6 +289,47 @@ func (cmd *Command) DeleteSnapshot(ctx context.Context, repoName string, snapsho
 		logger.Error("deleting snapshot", zap.Error(err))
 	} else {
 		logger.Debug("deleted snapshot")
+	}
+	return
+}
+
+// ExcludeFromVoting excludes a master node from voting in the master election.
+// If the named node is not a master node, an error is returned.
+func (cmd *Command) ExcludeFromVoting(ctx context.Context, nodeName string) (err error) {
+	timer := metrics.NewVecTimer(CommandExcludeFromVotingDuration)
+	defer timer.ObserveErr(err)
+
+	cmd.votingExclusionMu.Lock()
+	defer cmd.votingExclusionMu.Unlock()
+
+	logger := ctxlog.L(ctx).Named("Command.ExcludeFromVoting").With(zap.String("node_name", nodeName))
+
+	logger.Debug("excluding node from master voting")
+	_, err = es.NewClusterPostVotingConfigExclusion(cmd.client).Node(nodeName).Do(ctx)
+	if err != nil {
+		logger.Error("error excluding node from master voting", zap.Error(err))
+	} else {
+		logger.Debug("excluded node from master voting")
+	}
+	return
+}
+
+// ClearVotingExclusions clears all master node voting exclusions.
+func (cmd *Command) ClearVotingExclusions(ctx context.Context) (err error) {
+	timer := metrics.NewVecTimer(CommandClearVotingExclusionsDuration)
+	defer timer.ObserveErr(err)
+
+	cmd.votingExclusionMu.Lock()
+	defer cmd.votingExclusionMu.Unlock()
+
+	logger := ctxlog.L(ctx).Named("Command.ClearVotingExclusions")
+
+	logger.Debug("clearing master voting exclusions")
+	_, err = es.NewClusterDeleteVotingConfigExclusion(cmd.client).Do(ctx)
+	if err != nil {
+		logger.Error("error clearing master voting exclusions", zap.Error(err))
+	} else {
+		logger.Debug("cleared master voting exclusions")
 	}
 	return
 }
