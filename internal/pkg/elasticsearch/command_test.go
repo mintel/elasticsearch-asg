@@ -1,4 +1,4 @@
-package esasg
+package elasticsearch
 
 import (
 	"context"
@@ -19,7 +19,7 @@ const (
 // b is a quick and dirty map type for specifying JSON bodies.
 type b map[string]interface{}
 
-func TestElasticsearchCommandService_Drain(t *testing.T) {
+func TestCommand_Drain(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 
@@ -40,7 +40,7 @@ func TestElasticsearchCommandService_Drain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewElasticsearchCommandService(esClient)
+	s := NewCommand(esClient)
 	err = s.Drain(context.Background(), node1Name)
 	assert.NoError(t, err)
 	assert.True(t, gock.IsDone())
@@ -69,7 +69,7 @@ func TestElasticsearchCommandService_Drain(t *testing.T) {
 	assert.True(t, gock.IsDone())
 }
 
-func TestElasticsearchCommandService_Undrain(t *testing.T) {
+func TestCommand_Undrain(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 
@@ -90,7 +90,7 @@ func TestElasticsearchCommandService_Undrain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewElasticsearchCommandService(esClient)
+	s := NewCommand(esClient)
 	err = s.Undrain(context.Background(), node1Name)
 	assert.NoError(t, err)
 	assert.True(t, gock.IsDone())

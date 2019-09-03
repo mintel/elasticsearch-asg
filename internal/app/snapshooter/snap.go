@@ -1,10 +1,14 @@
-package main
+package snapshooter
 
 import (
 	"time"
 
 	ptime "github.com/mintel/elasticsearch-asg/pkg/time" // Time utilities
 )
+
+// SnapshotFormat is the format for snapshot names (time.Time.Format()).
+// Elasticsearch snapshot names may not contain spaces.
+const SnapshotFormat = "snapshooter-2006-01-02t15-04-05"
 
 // SnapshotWindow represents how often to take Elasticsearch snapshots,
 // and how long to keep them.

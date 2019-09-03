@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"                        // Logging
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line args parser
 
-	"github.com/mintel/elasticsearch-asg/cmd"                    // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"       // Common logging setup func
 	eshealth "github.com/mintel/elasticsearch-asg/pkg/es/health" // Funcs to evaluate Elasticsearch health in various ways
 )
 

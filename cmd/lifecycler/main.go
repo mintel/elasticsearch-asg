@@ -25,12 +25,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	esasg "github.com/mintel/elasticsearch-asg"         // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/cmd"           // Common logging setup func
-	"github.com/mintel/elasticsearch-asg/pkg/es"        // Elasticsearch client extensions
-	"github.com/mintel/elasticsearch-asg/pkg/lifecycle" // Handle AWS Autoscaling Group lifecycle hook event messages.
-	"github.com/mintel/elasticsearch-asg/pkg/metrics"   // Prometheus metrics
-	"github.com/mintel/elasticsearch-asg/pkg/squeues"   // SQS message dispatcher
+	"github.com/mintel/elasticsearch-asg/internal/app/lifecycler"    // Implementation
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"           // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/internal/pkg/elasticsearch" // Complex Elasticsearch services
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"       // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/es"                     // Elasticsearch client extensions
+	"github.com/mintel/elasticsearch-asg/pkg/lifecycle"              // Handle AWS Autoscaling Group lifecycle hook event messages.
+	"github.com/mintel/elasticsearch-asg/pkg/squeues"                // SQS message dispatcher
 )
 
 // Request retry count/timeouts.
@@ -39,8 +40,6 @@ const (
 	esRetryInit   = 150 * time.Millisecond
 	esRetryMax    = 1200 * time.Millisecond
 )
-
-const subsystem = "lifecycler"
 
 // defaultURL is the default Elasticsearch URL.
 const defaultURL = "http://localhost:9200"
@@ -94,7 +93,7 @@ func main() {
 	conf := aws.NewConfig().WithRegion(region).WithMaxRetries(awsMaxRetries)
 	sess := session.Must(session.NewSession(conf))
 	prometheus.WrapRegistererWithPrefix(
-		prometheus.BuildFQName(metrics.Namespace, "", subsystem),
+		prometheus.BuildFQName(metrics.Namespace, "", lifecycler.Subsystem),
 		prometheus.DefaultRegisterer,
 	).MustRegister(metrics.InstrumentAWS(&sess.Handlers, nil)...) // TODO: Define better buckets.
 	asClient := autoscaling.New(sess)
@@ -111,7 +110,7 @@ func main() {
 	}
 
 	// Setup healthchecks
-	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", subsystem))
+	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", lifecycler.Subsystem))
 	health.AddLivenessCheck("up", func() error {
 		return nil
 	})
@@ -184,7 +183,7 @@ func main() {
 
 			// Do some initial work if the instance is terminating.
 			// First, fetch info about this Elasticsearch node.
-			n, err := esasg.NewElasticsearchQueryService(esClient).Node(ctx, event.InstanceID)
+			n, err := elasticsearch.NewQuery(esClient).Node(ctx, event.InstanceID)
 			if err != nil {
 				return err
 			} else if n == nil {
@@ -192,7 +191,7 @@ func main() {
 				return nil
 			}
 
-			esCommand := esasg.NewElasticsearchCommandService(esClient)
+			esCommand := elasticsearch.NewCommand(esClient)
 
 			// Drain any index shards from node by settings a shard allocation exclusion.
 			if err := esCommand.Drain(ctx, n.Name); err != nil {
@@ -318,7 +317,7 @@ func terminateCondition(logger *zap.Logger, client *elastic.Client) func(context
 		}
 
 		// Wait for all index shards to drain off this node.
-		if n, err := esasg.NewElasticsearchQueryService(client).Node(ctx, event.InstanceID); err != nil {
+		if n, err := elasticsearch.NewQuery(client).Node(ctx, event.InstanceID); err != nil {
 			return false, err
 		} else if len(n.Indices()) > 0 {
 			logger.Info("condition failed: node still has shards")

@@ -21,9 +21,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
-	esasg "github.com/mintel/elasticsearch-asg"       // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/cmd"         // Common logging setup func
-	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/internal/app/cloudwatcher"  // Implementation
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"           // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/internal/pkg/elasticsearch" // Complex Elasticsearch services
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"       // Prometheus metrics
 )
 
 // Request retry count/timeouts.
@@ -36,16 +37,12 @@ const (
 // defaultURL is the default Elasticsearch URL.
 const defaultURL = "http://localhost:9200"
 
-const (
-	subsystem = "cloudwatcher"
-)
-
 var (
 	// loopDuration tracks the duration of main loop of cloudwatcher.
 	// It has a label `status` which is one of "success", "error", or "sleep".
 	loopDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
-		Subsystem: subsystem,
+		Subsystem: cloudwatcher.Subsystem,
 		Name:      "mainloop_duration_seconds",
 		Help:      "Tracks the duration of main loop.",
 		Buckets:   prometheus.DefBuckets, // TODO: Define better buckets.
@@ -87,7 +84,7 @@ func main() {
 	// Make AWS clients.
 	sess := session.Must(session.NewSession())
 	prometheus.WrapRegistererWithPrefix(
-		prometheus.BuildFQName(metrics.Namespace, "", subsystem),
+		prometheus.BuildFQName(metrics.Namespace, "", cloudwatcher.Subsystem),
 		prometheus.DefaultRegisterer,
 	).MustRegister(metrics.InstrumentAWS(&sess.Handlers, nil)...) // TODO: Define better buckets.
 	awsConfig := aws.NewConfig().WithMaxRetries(awsMaxRetries)
@@ -110,10 +107,10 @@ func main() {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
 
-	esQuery := esasg.NewElasticsearchQueryService(esClient)
+	esQuery := elasticsearch.NewQuery(esClient)
 
 	// Setup healthchecks
-	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", subsystem))
+	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", cloudwatcher.Subsystem))
 	health.AddLivenessCheck("up", func() error {
 		return nil
 	})
@@ -131,7 +128,7 @@ func main() {
 		}
 	}()
 
-	var nodes map[string]*esasg.Node
+	var nodes map[string]*elasticsearch.Node
 	var vcpuCounts map[string]int
 	var loopTimer *prometheus.Timer
 	for range time.NewTicker(*interval).C { // Each --interval...
@@ -153,7 +150,7 @@ func main() {
 		for id := range nodes {
 			instanceIDs = append(instanceIDs, id)
 		}
-		vcpuCounts, err = GetInstanceVCPUCount(ctx, ec2Client, instanceIDs)
+		vcpuCounts, err = cloudwatcher.GetInstanceVCPUCount(ctx, ec2Client, instanceIDs)
 		if err != nil {
 			logger.Error("error getting EC2 instances vCPU counts", zap.Error(err))
 			loopDurationError.Observe(loopTimer.ObserveDuration().Seconds())
@@ -161,11 +158,11 @@ func main() {
 		}
 
 		// Generate CloudWatch metric data points from nodes and vcpu counts.
-		metricData := MakeCloudwatchData(nodes, vcpuCounts)
+		metricData := cloudwatcher.MakeCloudwatchData(nodes, vcpuCounts)
 		for _, datum := range metricData {
-			LogDatum(logger, datum)
+			cloudwatcher.LogDatum(logger, datum)
 		}
-		if err = PushCloudwatchData(ctx, cwClient, metricData); err != nil {
+		if err = cloudwatcher.PushCloudwatchData(ctx, cwClient, *namespace, metricData); err != nil {
 			logger.Error("error pushing metrics to CloudWatch", zap.Error(err))
 			loopDurationError.Observe(loopTimer.ObserveDuration().Seconds())
 			continue

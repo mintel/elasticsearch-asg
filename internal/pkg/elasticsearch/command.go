@@ -1,4 +1,4 @@
-package esasg
+package elasticsearch
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 	"github.com/tidwall/gjson" // Just-In-Time JSON parsing
 	"go.uber.org/zap"          // Logging
 
-	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"  // Logger from context
-	"github.com/mintel/elasticsearch-asg/pkg/es"      // Elasticsearch client extensions
-	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"           // Logger from context
+	"github.com/mintel/elasticsearch-asg/pkg/es"               // Elasticsearch client extensions
 )
 
 const (
@@ -23,8 +23,8 @@ const (
 )
 
 var (
-	// ElasticsearchCommandDrainDuration is the Prometheus metric for ElasticsearchCommand.Drain() durations.
-	ElasticsearchCommandDrainDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	// CommandDrainDuration is the Prometheus metric for Command.Drain() durations.
+	CommandDrainDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: commandSubsystem,
 		Name:      "drain_shards_request_duration_seconds",
@@ -32,8 +32,8 @@ var (
 		Buckets:   prometheus.DefBuckets,
 	}, []string{metrics.LabelStatus})
 
-	// ElasticsearchCommandUndrainDuration is the Prometheus metric for ElasticsearchCommand.Undrain() durations.
-	ElasticsearchCommandUndrainDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	// CommandUndrainDuration is the Prometheus metric for Command.Undrain() durations.
+	CommandUndrainDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: commandSubsystem,
 		Name:      "undrain_shards_request_duration_seconds",
@@ -42,15 +42,15 @@ var (
 	}, []string{metrics.LabelStatus})
 )
 
-// ElasticsearchCommandService implements methods that write to Elasticsearch endpoints.
-type ElasticsearchCommandService struct {
+// Command implements methods that write to Elasticsearch endpoints.
+type Command struct {
 	client     *elastic.Client
 	settingsMu sync.Mutex // Elasticsearch doesn't provide an atomic way to modify settings
 }
 
-// NewElasticsearchCommandService returns a new ElasticsearchCommandService.
-func NewElasticsearchCommandService(client *elastic.Client) *ElasticsearchCommandService {
-	return &ElasticsearchCommandService{
+// NewCommand returns a new Command.
+func NewCommand(client *elastic.Client) *Command {
+	return &Command{
 		client: client,
 	}
 }
@@ -59,11 +59,11 @@ func NewElasticsearchCommandService(client *elastic.Client) *ElasticsearchComman
 // to remove shards from the node until empty.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string) (err error) {
-	timer := metrics.NewVecTimer(ElasticsearchCommandDrainDuration)
+func (s *Command) Drain(ctx context.Context, nodeName string) (err error) {
+	timer := metrics.NewVecTimer(CommandDrainDuration)
 	defer timer.ObserveErr(err)
 
-	logger := ctxlog.L(ctx).Named("ElasticsearchCommandService.Drain").With(zap.String("node_name", nodeName))
+	logger := ctxlog.L(ctx).Named("Command.Drain").With(zap.String("node_name", nodeName))
 
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
@@ -108,11 +108,11 @@ func (s *ElasticsearchCommandService) Drain(ctx context.Context, nodeName string
 // Undrain reverses Drain.
 //
 // See: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/allocation-filtering.html
-func (s *ElasticsearchCommandService) Undrain(ctx context.Context, nodeName string) (err error) {
-	timer := metrics.NewVecTimer(ElasticsearchCommandUndrainDuration)
+func (s *Command) Undrain(ctx context.Context, nodeName string) (err error) {
+	timer := metrics.NewVecTimer(CommandUndrainDuration)
 	defer timer.ObserveErr(err)
 
-	logger := ctxlog.L(ctx).Named("ElasticsearchCommandService.Undrain").With(zap.String("node_name", nodeName))
+	logger := ctxlog.L(ctx).Named("Command.Undrain").With(zap.String("node_name", nodeName))
 
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()

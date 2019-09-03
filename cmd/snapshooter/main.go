@@ -15,15 +15,10 @@ import (
 	"go.uber.org/zap"                        // Logging
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line args parser
 
-	"github.com/mintel/elasticsearch-asg/cmd"         // Common logging setup func
-	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/internal/app/snapshooter" // Implementation
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"         // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"     // Prometheus metrics
 )
-
-// SnapshotFormat is the format for snapshot names (time.Time.Format()).
-// Elasticsearch snapshot names may not contain spaces.
-const SnapshotFormat = "snapshooter-2006-01-02t15-04-05"
-
-const subsystem = "snapshooter"
 
 var (
 	// loopDuration tracks the duration of main loop of snapshooter.
@@ -33,7 +28,7 @@ var (
 	// snapshots is taking too long.
 	loopDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
-		Subsystem: subsystem,
+		Subsystem: snapshooter.Subsystem,
 		Name:      "mainloop_duration_seconds",
 		Help:      "Tracks the duration of main loop.",
 		Buckets:   prometheus.DefBuckets, // TODO: Define better buckets.
@@ -78,9 +73,9 @@ func main() {
 	}()
 
 	// Parse the snapshot schedule.
-	snapshotSchedule := make(SnapshotWindows, 0)
+	snapshotSchedule := make(snapshooter.SnapshotWindows, 0)
 	for keepFor, every := range *windows {
-		w, err := NewSnapshotWindow(every, keepFor)
+		w, err := snapshooter.NewSnapshotWindow(every, keepFor)
 		if err != nil {
 			logger.Fatal("error parsing snapshot window",
 				zap.String("keepFor", keepFor),
@@ -107,7 +102,7 @@ func main() {
 	}
 
 	// Setup healthchecks
-	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", subsystem))
+	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", snapshooter.Subsystem))
 	health.AddLivenessCheck("up", func() error {
 		return nil
 	})
@@ -197,7 +192,7 @@ func createSnapshot(ctx context.Context, client *elastic.Client, repoName string
 	if d := time.Since(now); -time.Second < d && d < time.Second {
 		panic("now is not within one second of the current time")
 	}
-	snapshotName := now.Format(SnapshotFormat)
+	snapshotName := now.Format(snapshooter.SnapshotFormat)
 	logger.Info("creating snapshot", zap.String("snapshot", snapshotName))
 	_, err := client.SnapshotCreate(repoName, snapshotName).WaitForCompletion(true).Do(ctx)
 	if err != nil {
@@ -211,7 +206,7 @@ func createSnapshot(ctx context.Context, client *elastic.Client, repoName string
 }
 
 // deleteOldSnapshots deletes Elaticsearch snapshots if they don't match schedule.
-func deleteOldSnapshots(ctx context.Context, client *elastic.Client, repoName string, schedule SnapshotWindows) error {
+func deleteOldSnapshots(ctx context.Context, client *elastic.Client, repoName string, schedule snapshooter.SnapshotWindows) error {
 	resp, err := client.SnapshotGet(repoName).Do(ctx)
 	if err != nil {
 		logger.Fatal("error getting existing snapshots", zap.Error(err))
@@ -221,7 +216,7 @@ func deleteOldSnapshots(ctx context.Context, client *elastic.Client, repoName st
 		if !strings.HasPrefix(s.Snapshot, "snapshooter-") {
 			continue
 		}
-		t, err := time.Parse(SnapshotFormat, s.Snapshot)
+		t, err := time.Parse(snapshooter.SnapshotFormat, s.Snapshot)
 		if err != nil {
 			logger.Fatal("error parsing time from snapshot name",
 				zap.String("snapshot", s.Snapshot),

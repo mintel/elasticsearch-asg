@@ -1,4 +1,4 @@
-package esasg
+package elasticsearch
 
 import (
 	"sort"

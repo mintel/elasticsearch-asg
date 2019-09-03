@@ -1,4 +1,4 @@
-package esasg
+package elasticsearch
 
 import (
 	"context"
@@ -11,21 +11,21 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap" // Logging
 
-	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"  // Logger from context
-	"github.com/mintel/elasticsearch-asg/pkg/es"      // Elasticsearch client extensions
-	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
-	"github.com/mintel/elasticsearch-asg/pkg/str"     // String utilities
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"           // Logger from context
+	"github.com/mintel/elasticsearch-asg/pkg/es"               // Elasticsearch client extensions
+	"github.com/mintel/elasticsearch-asg/pkg/str"              // String utilities
 )
 
-// ErrInconsistentNodes is returned when ElasticsearchQueryService.Nodes()
+// ErrInconsistentNodes is returned when Query.Nodes()
 // gets different sets of nodes from Elasticsearch across API calls.
 var ErrInconsistentNodes = errors.New("got inconsistent nodes from Elasticsearch")
 
 const querySubsystem = "query"
 
 var (
-	// ElasticsearchQueryClusterNameDuration is the Prometheus metric for ElasticsearchQuery.ClusterName() durations.
-	ElasticsearchQueryClusterNameDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	// QueryClusterNameDuration is the Prometheus metric for Query.ClusterName() durations.
+	QueryClusterNameDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: querySubsystem,
 		Name:      "cluster_name_request_duration_seconds",
@@ -33,8 +33,8 @@ var (
 		Buckets:   prometheus.DefBuckets,
 	}, []string{metrics.LabelStatus})
 
-	// ElasticsearchQueryNodesDuration is the Prometheus metric for ElasticsearchQuery.Nodes() and Node() durations.
-	ElasticsearchQueryNodesDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	// QueryNodesDuration is the Prometheus metric for Query.Nodes() and Node() durations.
+	QueryNodesDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
 		Subsystem: querySubsystem,
 		Name:      "nodes_request_duration_seconds",
@@ -43,23 +43,23 @@ var (
 	}, []string{metrics.LabelStatus})
 )
 
-// ElasticsearchQueryService implements methods that read from Elasticsearch endpoints.
-type ElasticsearchQueryService struct {
+// Query implements methods that read from Elasticsearch endpoints.
+type Query struct {
 	client *elastic.Client
 }
 
-// NewElasticsearchQueryService returns a new ElasticsearchQueryService.
-func NewElasticsearchQueryService(client *elastic.Client) *ElasticsearchQueryService {
-	return &ElasticsearchQueryService{
+// NewQuery returns a new Query.
+func NewQuery(client *elastic.Client) *Query {
+	return &Query{
 		client: client,
 	}
 }
 
 // ClusterName return the name of the Elasticsearch cluster.
-func (s *ElasticsearchQueryService) ClusterName(ctx context.Context) (name string, err error) {
-	timer := metrics.NewVecTimer(ElasticsearchQueryClusterNameDuration)
+func (s *Query) ClusterName(ctx context.Context) (name string, err error) {
+	timer := metrics.NewVecTimer(QueryClusterNameDuration)
 	defer timer.ObserveErr(err)
-	logger := ctxlog.L(ctx).Named("ElasticsearchQueryService.ClusterName")
+	logger := ctxlog.L(ctx).Named("Query.ClusterName")
 	logger.Debug("getting cluster name")
 	var resp *elastic.ClusterHealthResponse
 	resp, err = s.client.ClusterHealth().Do(ctx)
@@ -74,10 +74,10 @@ func (s *ElasticsearchQueryService) ClusterName(ctx context.Context) (name strin
 
 // Node returns a single node with the given name.
 // Will return nil if the node doesn't exist.
-func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (node *Node, err error) {
-	timer := metrics.NewVecTimer(ElasticsearchQueryNodesDuration)
+func (s *Query) Node(ctx context.Context, name string) (node *Node, err error) {
+	timer := metrics.NewVecTimer(QueryNodesDuration)
 	defer timer.ObserveErr(err)
-	ctx = ctxlog.WithName(ctx, "ElasticsearchQueryService.Node")
+	ctx = ctxlog.WithName(ctx, "Query.Node")
 	var nodes map[string]*Node
 	nodes, err = s.nodes(ctx, name)
 	if err != nil {
@@ -91,16 +91,16 @@ func (s *ElasticsearchQueryService) Node(ctx context.Context, name string) (node
 // as a map from node name to Node.
 // If names are passed, limit to nodes with those names.
 // It's left up to the caller to check if all the names are in the response.
-func (s *ElasticsearchQueryService) Nodes(ctx context.Context, names ...string) (nodes map[string]*Node, err error) {
-	timer := metrics.NewVecTimer(ElasticsearchQueryNodesDuration)
+func (s *Query) Nodes(ctx context.Context, names ...string) (nodes map[string]*Node, err error) {
+	timer := metrics.NewVecTimer(QueryNodesDuration)
 	defer timer.ObserveErr(err)
-	ctx = ctxlog.WithName(ctx, "ElasticsearchQueryService.Nodes")
+	ctx = ctxlog.WithName(ctx, "Query.Nodes")
 	nodes, err = s.nodes(ctx, names...)
 	return
 }
 
-func (s *ElasticsearchQueryService) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
-	logger := ctxlog.L(ctx).Named("ElasticsearchQueryService.ClusterName")
+func (s *Query) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
+	logger := ctxlog.L(ctx).Named("Query.ClusterName")
 
 	// We collect information from 4 Elasticsearch endpoints.
 	// The requests are send concurrently by separate goroutines.

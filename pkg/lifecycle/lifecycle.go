@@ -20,8 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 
-	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"  // Logger from context
-	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Promtheus metrics
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Promtheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"           // Logger from context
 )
 
 var (

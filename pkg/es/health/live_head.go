@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/heptiolabs/healthcheck"               // Healthchecks framework
-	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
-	elastic "github.com/olivere/elastic/v7"           // Elasticsearch client
-	"go.uber.org/zap"                                 // Logging
+	"github.com/heptiolabs/healthcheck"                        // Healthchecks framework
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Prometheus metrics
+	elastic "github.com/olivere/elastic/v7"                    // Elasticsearch client
+	"go.uber.org/zap"                                          // Logging
 
 	"github.com/mintel/elasticsearch-asg/pkg/ctxlog" // Logger from context
 )

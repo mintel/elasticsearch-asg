@@ -1,4 +1,4 @@
-package main
+package cloudwatcher
 
 import (
 	"bytes"
@@ -20,16 +20,16 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 
-	esasg "github.com/mintel/elasticsearch-asg"       // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
-	"github.com/mintel/elasticsearch-asg/pkg/str"     // String utilities
+	"github.com/mintel/elasticsearch-asg/internal/pkg/elasticsearch" // Complex Elasticsearch services
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"       // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/str"                    // String utilities
 )
 
 var (
 	// pushMetricsTotal tracks the number of metric data points pushed to CloudWatch.
 	pushMetricsTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: metrics.Namespace,
-		Subsystem: subsystem,
+		Subsystem: Subsystem,
 		Name:      "pushed_metrics_total",
 		Help:      "Count of metrics pushed to AWS CloudWatch.",
 	})
@@ -49,9 +49,9 @@ var (
 // - Count of nodes excluded from shard allocation
 //
 // Args:
-// - nodes is the sort of output returned by esasg.ElasticsearchQueryService.Nodes().
+// - nodes is the sort of output returned by elasticsearch.Query.Nodes().
 // - vcpuCounts is the sort of output returned by GetInstanceVCPUCount().
-func MakeCloudwatchData(nodes map[string]*esasg.Node, vcpuCounts map[string]int) []*cloudwatch.MetricDatum {
+func MakeCloudwatchData(nodes map[string]*elasticsearch.Node, vcpuCounts map[string]int) []*cloudwatch.MetricDatum {
 	timestamp := time.Now() // All metrics have a timestamp.
 
 	// Get a set of all roles.
@@ -177,7 +177,7 @@ func newMetricsCollector() *metricsCollector {
 }
 
 // Add appends metrics about an Elasticsearch node to this collector.
-func (s *metricsCollector) Add(node *esasg.Node, vcpuCount int) {
+func (s *metricsCollector) Add(node *elasticsearch.Node, vcpuCount int) {
 	s.count++ // Increment count of nodes collected.
 
 	s.vcpuCounts = append(s.vcpuCounts, float64(vcpuCount)) // Add vCPU count.
@@ -503,7 +503,7 @@ func (s *metricsCollector) Metrics(dimensions []*cloudwatch.Dimension, timestamp
 //	- Single namespace per request
 //	- Max 10 dimensions per metric
 // Send metrics compressed and in batches.
-func PushCloudwatchData(ctx context.Context, svc cloudwatchiface.CloudWatchAPI, data []*cloudwatch.MetricDatum) error {
+func PushCloudwatchData(ctx context.Context, svc cloudwatchiface.CloudWatchAPI, namespace string, data []*cloudwatch.MetricDatum) error {
 	const batchSize = 30 // This is probably small enough.
 
 	for i := 0; i < len(data); i += batchSize {
@@ -513,7 +513,7 @@ func PushCloudwatchData(ctx context.Context, svc cloudwatchiface.CloudWatchAPI, 
 		}
 		batch := data[i:j]
 		req, _ := svc.PutMetricDataRequest(&cloudwatch.PutMetricDataInput{
-			Namespace:  namespace,
+			Namespace:  aws.String(namespace),
 			MetricData: batch,
 		})
 		req.Handlers.Build.PushBack(compressPayload)

@@ -1,4 +1,4 @@
-package main
+package cloudwatcher
 
 //go:generate sh -c "mockery -name=EC2API -dir=$(go list -f '{{.Dir}}' github.com/aws/aws-sdk-go/service/ec2/ec2iface)"
 
@@ -19,10 +19,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
-	esasg "github.com/mintel/elasticsearch-asg"                  // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/cmd/cloudwatcher/mocks" // Mocked AWS client(s)
-	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"             // Logger from context
-	"github.com/mintel/elasticsearch-asg/pkg/str"                // String utilities
+	"github.com/mintel/elasticsearch-asg/internal/app/cloudwatcher/mocks" // Mocked AWS client(s)
+	"github.com/mintel/elasticsearch-asg/internal/pkg/elasticsearch"      // Complex Elasticsearch services
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"                      // Logger from context
+	"github.com/mintel/elasticsearch-asg/pkg/str"                         // String utilities
 )
 
 const (
@@ -49,7 +49,7 @@ func TestMakeCloudwatchData(t *testing.T) {
 		return
 	}
 
-	esQuery := esasg.NewElasticsearchQueryService(esClient)
+	esQuery := elasticsearch.NewQuery(esClient)
 	nodes, err := esQuery.Nodes(context.TODO())
 	if !assert.NoError(t, err) {
 		return

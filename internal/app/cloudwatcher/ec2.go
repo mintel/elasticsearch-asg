@@ -1,4 +1,4 @@
-package main
+package cloudwatcher
 
 import (
 	"context"
@@ -15,8 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 
-	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"  // Logger from context
-	"github.com/mintel/elasticsearch-asg/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"           // Logger from context
 )
 
 // Cache EC2 instance ID => int count of vcpu cores.
@@ -28,7 +28,7 @@ var (
 	//nolint:deadcode,unused,varcheck
 	vCPUCacheSize = promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: metrics.Namespace,
-		Subsystem: subsystem,
+		Subsystem: Subsystem,
 		Name:      "instance_vcpus_cache_size",
 		Help:      "Size of the cache of EC2 instance vCPU count information.",
 	}, func() float64 {

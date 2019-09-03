@@ -1,4 +1,4 @@
-package esasg
+package elasticsearch
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
 )
 
-func TestElasticsearchQueryService_Nodes(t *testing.T) {
+func TestQuery_Nodes(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 
@@ -40,7 +40,7 @@ func TestElasticsearchQueryService_Nodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewElasticsearchQueryService(esClient)
+	s := NewQuery(esClient)
 
 	nodes, err := s.Nodes(context.Background())
 	assert.NoError(t, err)
@@ -48,7 +48,7 @@ func TestElasticsearchQueryService_Nodes(t *testing.T) {
 	assert.Len(t, nodes, 9)
 }
 
-func TestElasticsearchQueryService_Node(t *testing.T) {
+func TestQuery_Node(t *testing.T) {
 	u, teardown := setup(t)
 	defer teardown()
 
@@ -81,7 +81,7 @@ func TestElasticsearchQueryService_Node(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewElasticsearchQueryService(esClient)
+	s := NewQuery(esClient)
 
 	n, err := s.Node(context.Background(), nodeName)
 	assert.NoError(t, err)
