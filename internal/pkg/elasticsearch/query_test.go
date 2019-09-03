@@ -2,6 +2,8 @@ package elasticsearch
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
@@ -10,11 +12,19 @@ import (
 )
 
 func TestQuery_Nodes(t *testing.T) {
+	gock.Intercept()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+
 	u, teardown := setup(t)
 	defer teardown()
 
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	if err != nil {
+		t.Fatalf("couldn't create elastic client: %s", err)
+	}
+	s := NewQuery(esClient)
+
 	gock.New(u).
 		Get("/_nodes/stats").
 		Reply(200).
@@ -36,12 +46,6 @@ func TestQuery_Nodes(t *testing.T) {
 		Type("json").
 		BodyString(loadTestData(t, "cat_shards.json"))
 
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	s := NewQuery(esClient)
-
 	nodes, err := s.Nodes(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, gock.IsDone())
@@ -49,39 +53,41 @@ func TestQuery_Nodes(t *testing.T) {
 }
 
 func TestQuery_Node(t *testing.T) {
+	gock.Intercept()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+
 	u, teardown := setup(t)
 	defer teardown()
 
 	const nodeName = "i-0f5c6d4d61d41b9fc"
-
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-	gock.New(u).
-		Get("/_nodes/" + nodeName + "/stats").
-		Reply(200).
-		Type("json").
-		BodyString(loadTestData(t, "nodes_stats_"+nodeName+".json"))
-	gock.New(u).
-		Get("/_nodes/" + nodeName + "/_all").
-		Reply(200).
-		Type("json").
-		BodyString(loadTestData(t, "nodes_info_"+nodeName+".json"))
-	gock.New(u).
-		Get("/_cluster/settings").
-		Reply(200).
-		Type("json").
-		BodyString(loadTestData(t, "cluster_settings.json"))
-	gock.New(u).
-		Get("/_cat/shards").
-		Reply(200).
-		Type("json").
-		BodyString(loadTestData(t, "cat_shards.json"))
 
 	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
 	s := NewQuery(esClient)
+
+	gock.New(u).
+		Get(fmt.Sprintf("/_nodes/%s/stats", nodeName)).
+		Reply(http.StatusOK).
+		Type("json").
+		BodyString(loadTestData(t, "nodes_stats_"+nodeName+".json"))
+	gock.New(u).
+		Get(fmt.Sprintf("/_nodes/%s/_all", nodeName)).
+		Reply(http.StatusOK).
+		Type("json").
+		BodyString(loadTestData(t, "nodes_info_"+nodeName+".json"))
+	gock.New(u).
+		Get("/_cluster/settings").
+		Reply(http.StatusOK).
+		Type("json").
+		BodyString(loadTestData(t, "cluster_settings.json"))
+	gock.New(u).
+		Get("/_cat/shards").
+		Reply(http.StatusOK).
+		Type("json").
+		BodyString(loadTestData(t, "cat_shards.json"))
 
 	n, err := s.Node(context.Background(), nodeName)
 	assert.NoError(t, err)
@@ -97,6 +103,51 @@ func TestQuery_Node(t *testing.T) {
 		"aws_instance_family":    "i3",
 	}, n.Attributes)
 	assert.Len(t, n.Shards, 1)
+}
+
+func TestQuery_GetSnapshots(t *testing.T) {
+	gock.Intercept()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+
+	u, teardown := setup(t)
+	defer teardown()
+
+	const repoName = "myrepo"
+
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	if err != nil {
+		t.Fatalf("couldn't create elastic client: %s", err)
+	}
+	s := NewQuery(esClient)
+
+	t.Run("all", func(t *testing.T) {
+		gock.New(u).
+			Get(fmt.Sprintf("/_snapshot/%s/_all", repoName)).
+			Reply(http.StatusOK).
+			Type("json").
+			BodyString(loadTestData(t, "snapshots_get_all.json"))
+		snapshots, err := s.GetSnapshots(context.Background(), repoName)
+		assert.NoError(t, err)
+		assert.True(t, gock.IsDone())
+		assert.NotNil(t, snapshots)
+	})
+
+	t.Run("some", func(t *testing.T) {
+		const (
+			snapshot1 = "analytics-20190902t040001"
+			snapshot2 = "analytics-20190903t040001"
+		)
+		gock.New(u).
+			Get(fmt.Sprintf("/_snapshot/%s/%s,%s", repoName, snapshot1, snapshot2)).
+			Reply(http.StatusOK).
+			Type("json").
+			BodyString(loadTestData(t, "snapshots_get_some.json"))
+		snapshots, err := s.GetSnapshots(context.Background(), repoName, snapshot1, snapshot2)
+		assert.NoError(t, err)
+		assert.True(t, gock.IsDone())
+		assert.Len(t, snapshots, 2)
+	})
 }
 
 func TestParseShardNodes(t *testing.T) {

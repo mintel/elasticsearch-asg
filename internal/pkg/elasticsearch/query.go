@@ -41,6 +41,15 @@ var (
 		Help:      "Requests to get Elasticsearch nodes info.",
 		Buckets:   prometheus.DefBuckets,
 	}, []string{metrics.LabelStatus})
+
+	// QueryGetSnapshotsDuration is the Prometheus metric for Query.GetSnapshots() durations.
+	QueryGetSnapshotsDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: querySubsystem,
+		Name:      "get_snapshots_request_duration_seconds",
+		Help:      "Requests to list Elasticsearch snapshots.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{metrics.LabelStatus})
 )
 
 // Query implements methods that read from Elasticsearch endpoints.
@@ -56,13 +65,15 @@ func NewQuery(client *elastic.Client) *Query {
 }
 
 // ClusterName return the name of the Elasticsearch cluster.
-func (s *Query) ClusterName(ctx context.Context) (name string, err error) {
+func (q *Query) ClusterName(ctx context.Context) (name string, err error) {
 	timer := metrics.NewVecTimer(QueryClusterNameDuration)
 	defer timer.ObserveErr(err)
+
 	logger := ctxlog.L(ctx).Named("Query.ClusterName")
+
 	logger.Debug("getting cluster name")
 	var resp *elastic.ClusterHealthResponse
-	resp, err = s.client.ClusterHealth().Do(ctx)
+	resp, err = q.client.ClusterHealth().Do(ctx)
 	if err != nil {
 		logger.Error("error getting cluster name", zap.Error(err))
 		return
@@ -74,12 +85,12 @@ func (s *Query) ClusterName(ctx context.Context) (name string, err error) {
 
 // Node returns a single node with the given name.
 // Will return nil if the node doesn't exist.
-func (s *Query) Node(ctx context.Context, name string) (node *Node, err error) {
+func (q *Query) Node(ctx context.Context, name string) (node *Node, err error) {
 	timer := metrics.NewVecTimer(QueryNodesDuration)
 	defer timer.ObserveErr(err)
 	ctx = ctxlog.WithName(ctx, "Query.Node")
 	var nodes map[string]*Node
-	nodes, err = s.nodes(ctx, name)
+	nodes, err = q.nodes(ctx, name)
 	if err != nil {
 		return
 	}
@@ -91,15 +102,15 @@ func (s *Query) Node(ctx context.Context, name string) (node *Node, err error) {
 // as a map from node name to Node.
 // If names are passed, limit to nodes with those names.
 // It's left up to the caller to check if all the names are in the response.
-func (s *Query) Nodes(ctx context.Context, names ...string) (nodes map[string]*Node, err error) {
+func (q *Query) Nodes(ctx context.Context, names ...string) (nodes map[string]*Node, err error) {
 	timer := metrics.NewVecTimer(QueryNodesDuration)
 	defer timer.ObserveErr(err)
 	ctx = ctxlog.WithName(ctx, "Query.Nodes")
-	nodes, err = s.nodes(ctx, names...)
+	nodes, err = q.nodes(ctx, names...)
 	return
 }
 
-func (s *Query) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
+func (q *Query) nodes(ctx context.Context, names ...string) (map[string]*Node, error) {
 	logger := ctxlog.L(ctx).Named("Query.ClusterName")
 
 	// We collect information from 4 Elasticsearch endpoints.
@@ -126,7 +137,7 @@ func (s *Query) nodes(ctx context.Context, names ...string) (map[string]*Node, e
 		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
 		logger.Debug("getting nodes stats")
-		statsResp, err = s.client.NodesStats().NodeId(names...).Do(ctx)
+		statsResp, err = q.client.NodesStats().NodeId(names...).Do(ctx)
 		if err != nil {
 			logger.Error("error getting nodes stats", zap.Error(err))
 			errc <- err
@@ -140,7 +151,7 @@ func (s *Query) nodes(ctx context.Context, names ...string) (map[string]*Node, e
 		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
 		logger.Debug("getting nodes info")
-		infoResp, err = s.client.NodesInfo().NodeId(names...).Do(ctx)
+		infoResp, err = q.client.NodesInfo().NodeId(names...).Do(ctx)
 		if err != nil {
 			logger.Error("error getting nodes info", zap.Error(err))
 			errc <- err
@@ -154,7 +165,7 @@ func (s *Query) nodes(ctx context.Context, names ...string) (map[string]*Node, e
 		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		var err error
 		logger.Debug("getting shards info")
-		shardsResp, err = es.NewCatShardsService(s.client).Do(ctx)
+		shardsResp, err = es.NewCatShardsService(q.client).Do(ctx)
 		if err != nil {
 			logger.Error("error getting shards info", zap.Error(err))
 			errc <- err
@@ -167,7 +178,7 @@ func (s *Query) nodes(ctx context.Context, names ...string) (map[string]*Node, e
 	go func() {
 		defer wg.Done() // Decrement goroutine counter on goroutine end.
 		logger.Debug("getting cluster settings")
-		resp, err := es.NewClusterGetSettingsService(s.client).FilterPath("*." + shardAllocExcludeSetting + ".*").Do(ctx)
+		resp, err := es.NewClusterGetSettingsService(q.client).FilterPath("*." + shardAllocExcludeSetting + ".*").Do(ctx)
 		if err != nil {
 			logger.Error("error getting cluster settings", zap.Error(err))
 			errc <- err
@@ -278,6 +289,30 @@ func (s *Query) nodes(ctx context.Context, names ...string) (map[string]*Node, e
 	}
 
 	return nodes, nil
+}
+
+// GetSnapshots returns a list of all snapshots in a given Elasticsearch snapshot repository.
+// If names are passed response is limited to snapshots with those names.
+func (q *Query) GetSnapshots(ctx context.Context, repoName string, names ...string) (snapshots []*elastic.Snapshot, err error) {
+	timer := metrics.NewVecTimer(QueryGetSnapshotsDuration)
+	defer timer.ObserveErr(err)
+
+	logger := ctxlog.L(ctx).Named("Query.GetSnapshots").With(zap.String("repository_name", repoName))
+
+	var resp *elastic.SnapshotGetResponse
+	s := q.client.SnapshotGet(repoName)
+	if len(names) != 0 {
+		s.Snapshot(names...)
+	}
+
+	logger.Debug("getting snapshots")
+	if resp, err = s.Do(ctx); err != nil {
+		logger.Error("error getting snapshots")
+	} else {
+		snapshots = resp.Snapshots
+		logger.Debug("got snapshots", zap.Int("count", len(snapshots)))
+	}
+	return
 }
 
 // parseShardNodes parses the node name from the /_cat/shards endpoint response

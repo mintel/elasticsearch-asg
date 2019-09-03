@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -15,9 +14,10 @@ import (
 	"go.uber.org/zap"                        // Logging
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line args parser
 
-	"github.com/mintel/elasticsearch-asg/internal/app/snapshooter" // Implementation
-	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"         // Common logging setup func
-	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"     // Prometheus metrics
+	"github.com/mintel/elasticsearch-asg/internal/app/snapshooter"   // Implementation
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"           // Common logging setup func
+	"github.com/mintel/elasticsearch-asg/internal/pkg/elasticsearch" // Elasticsearch Command/Query service
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"       // Prometheus metrics
 )
 
 var (
@@ -94,9 +94,12 @@ func main() {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
 
+	esQuery := elasticsearch.NewQuery(client)
+	esCmd := elasticsearch.NewCommand(client)
+
 	// If --type/--settings flags are set, create the snapshot repository if it doesn't exist.
 	if repoType != nil && *repoType != "" {
-		if err := ensureSnapshotRepo(ctx, client, *repoType, *repoName, *repoSettings); err != nil {
+		if err := esCmd.EnsureSnapshotRepo(ctx, *repoName, *repoType, *repoSettings); err != nil {
 			logger.Fatal("error ensuring snapshot repository exists", zap.Error(err))
 		}
 	}
@@ -134,7 +137,7 @@ func main() {
 		go func(t time.Time) {
 			logger.Debug("starting snapshot create/delete goroutine")
 			timer := prometheus.NewTimer(nil)
-			if err := createSnapshot(ctx, client, *repoName, t); err != nil {
+			if err := esCmd.CreateSnapshot(ctx, *repoName, snapshooter.SnapshotFormat, t); err != nil {
 				loopDurationError.Observe(timer.ObserveDuration().Seconds())
 				logger.Error("error while creating new snapshot", zap.Error(err))
 				return
@@ -142,98 +145,34 @@ func main() {
 			if !*delete {
 				return // If the --delete flag isn't set, don't clean up old snapshots.
 			}
-			if err := deleteOldSnapshots(ctx, client, *repoName, snapshotSchedule); err != nil {
+			snapshots, err := esQuery.GetSnapshots(ctx, *repoName)
+			if err != nil {
 				loopDurationError.Observe(timer.ObserveDuration().Seconds())
-				logger.Error("error while deleting old snapshots", zap.Error(err))
+				logger.Error("error getting existing snapshots", zap.Error(err))
 				return
+			}
+			for _, s := range snapshots {
+				t, err := time.Parse(snapshooter.SnapshotFormat, s.Snapshot)
+				if err != nil {
+					logger.Warn("error parsing time from snapshot name",
+						zap.String("snapshot", s.Snapshot),
+						zap.Error(err),
+					)
+					continue
+				}
+				if !snapshotSchedule.Keep(t) {
+					logger.Info("deleting snapshot", zap.String("snapshot", s.Snapshot))
+					if err := esCmd.DeleteSnapshot(ctx, *repoName, s.Snapshot); err != nil {
+						loopDurationError.Observe(timer.ObserveDuration().Seconds())
+						logger.Error("error deleting old snapshot",
+							zap.String("snapshot", s.Snapshot),
+							zap.Error(err),
+						)
+						return
+					}
+				}
 			}
 			loopDurationSuccess.Observe(timer.ObserveDuration().Seconds())
 		}(nextSnapshot)
 	}
-}
-
-// ensureSnapshotRepo ensures an Elasticsearch snapshot repository with the given type, name, and settings exists.
-//
-// If a repository with name doesn't exist, it will be created.
-// If a repository with name does exist but is the wrong type, an error will be returned.
-func ensureSnapshotRepo(ctx context.Context, client *elastic.Client, rType, name string, settings map[string]string) error {
-	resp, err := client.SnapshotGetRepository(name).Repository(name).Do(context.Background())
-	if err != nil && !elastic.IsNotFound(err) {
-		// Unexpected error while checking if snapshot repository exists.
-		logger.Error("error checking for existing snapshot repository", zap.Error(err))
-		return err
-	} else if repo, ok := resp[name]; elastic.IsNotFound(err) || !ok {
-		// Snapshot repository doesn't exist. Create it.
-		s := client.SnapshotCreateRepository(name).Type(rType)
-		for k, v := range settings {
-			s = s.Setting(k, v)
-		}
-		if _, err = s.Do(context.Background()); err != nil {
-			logger.Error("error creating snapshot repository", zap.Error(err))
-			return err
-		}
-	} else if ok && repo.Type != rType {
-		// Snapshot repository exists, but is of the wrong type e.g. fs != s3.
-		logger.Error(
-			"snapshot repository exists, but is the wrong type",
-			zap.String("want_type", rType),
-			zap.String("got_type", repo.Type),
-		)
-		return err
-	}
-	return nil
-}
-
-// createSnapshot creates a new Elasticsearch snapshot for the given time.
-//
-// If now is more than one second greater or less than time.Now(), this func will panic.
-func createSnapshot(ctx context.Context, client *elastic.Client, repoName string, now time.Time) error {
-	// Sanity-check now: it should be pretty close to time.Now()
-	if d := time.Since(now); -time.Second < d && d < time.Second {
-		panic("now is not within one second of the current time")
-	}
-	snapshotName := now.Format(snapshooter.SnapshotFormat)
-	logger.Info("creating snapshot", zap.String("snapshot", snapshotName))
-	_, err := client.SnapshotCreate(repoName, snapshotName).WaitForCompletion(true).Do(ctx)
-	if err != nil {
-		logger.Error("error creating snapshot",
-			zap.String("snapshot", snapshotName),
-			zap.Error(err),
-		)
-		return err
-	}
-	return nil
-}
-
-// deleteOldSnapshots deletes Elaticsearch snapshots if they don't match schedule.
-func deleteOldSnapshots(ctx context.Context, client *elastic.Client, repoName string, schedule snapshooter.SnapshotWindows) error {
-	resp, err := client.SnapshotGet(repoName).Do(ctx)
-	if err != nil {
-		logger.Fatal("error getting existing snapshots", zap.Error(err))
-		return err
-	}
-	for _, s := range resp.Snapshots {
-		if !strings.HasPrefix(s.Snapshot, "snapshooter-") {
-			continue
-		}
-		t, err := time.Parse(snapshooter.SnapshotFormat, s.Snapshot)
-		if err != nil {
-			logger.Fatal("error parsing time from snapshot name",
-				zap.String("snapshot", s.Snapshot),
-				zap.Error(err),
-			)
-			return err
-		}
-		if !schedule.Keep(t) {
-			logger.Info("deleting snapshot", zap.String("snapshot", s.Snapshot))
-			if _, err := client.SnapshotDelete(repoName, s.Snapshot).Do(ctx); err != nil {
-				logger.Fatal("error deleting old snapshot",
-					zap.String("snapshot", s.Snapshot),
-					zap.Error(err),
-				)
-				return err
-			}
-		}
-	}
-	return nil
 }
