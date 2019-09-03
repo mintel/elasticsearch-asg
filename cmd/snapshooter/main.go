@@ -10,7 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/heptiolabs/healthcheck"
-	elastic "github.com/olivere/elastic/v7"  // Elasticsearch client
 	"go.uber.org/zap"                        // Logging
 	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line args parser
 
@@ -89,13 +88,10 @@ func main() {
 	ctx := context.Background()
 
 	// Craete Elasticsearch client.
-	client, err := elastic.DialContext(ctx, elastic.SetURL((*esURL).String()))
+	esCmd, esQuery, err := elasticsearch.New(ctx, (*esURL).String())
 	if err != nil {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
-
-	esQuery := elasticsearch.NewQuery(client)
-	esCmd := elasticsearch.NewCommand(client)
 
 	// If --type/--settings flags are set, create the snapshot repository if it doesn't exist.
 	if repoType != nil && *repoType != "" {

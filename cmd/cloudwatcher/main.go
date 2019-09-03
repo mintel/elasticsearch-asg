@@ -99,15 +99,14 @@ func main() {
 	ec2Client := ec2.New(sess, awsConfig)
 
 	// Make Elasticsearch client.
-	esClient, err := elastic.Dial(
-		elastic.SetURL((*esURL).String()),
+	_, esQuery, err := elasticsearch.New(
+		ctx,
+		(*esURL).String(),
 		elastic.SetRetrier(elastic.NewBackoffRetrier(elastic.NewExponentialBackoff(esRetryInit, esRetryMax))),
 	)
 	if err != nil {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
-
-	esQuery := elasticsearch.NewQuery(esClient)
 
 	// Setup healthchecks
 	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", cloudwatcher.Subsystem))

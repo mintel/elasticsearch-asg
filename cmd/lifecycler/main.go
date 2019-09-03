@@ -29,9 +29,8 @@ import (
 	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"           // Common logging setup func
 	"github.com/mintel/elasticsearch-asg/internal/pkg/elasticsearch" // Complex Elasticsearch services
 	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"       // Prometheus metrics
-	"github.com/mintel/elasticsearch-asg/pkg/es"                     // Elasticsearch client extensions
-	"github.com/mintel/elasticsearch-asg/pkg/lifecycle"              // Handle AWS Autoscaling Group lifecycle hook event messages.
-	"github.com/mintel/elasticsearch-asg/pkg/squeues"                // SQS message dispatcher
+	"github.com/mintel/elasticsearch-asg/pkg/lifecycle" // Handle AWS Autoscaling Group lifecycle hook event messages.
+	"github.com/mintel/elasticsearch-asg/pkg/squeues"   // SQS message dispatcher
 )
 
 // Request retry count/timeouts.
@@ -100,16 +99,14 @@ func main() {
 	sqsClient := sqs.New(sess)
 
 	// Make Elasticsearch client.
-	esClient, err := elastic.DialContext(
+	esCmd, esQuery, err := elasticsearch.New(
 		context.Background(),
-		elastic.SetURL((*esURL).String()),
+		(*esURL).String(),
 		elastic.SetRetrier(elastic.NewBackoffRetrier(elastic.NewExponentialBackoff(esRetryInit, esRetryMax))),
 	)
 	if err != nil {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
-	esQuery := elasticsearch.NewQuery(esClient)
-	esCmd := elasticsearch.NewCommand(esClient)
 
 	// Setup healthchecks
 	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", lifecycler.Subsystem))
