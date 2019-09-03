@@ -9,6 +9,9 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+// b is a quick and dirty map type for specifying JSON bodies.
+type b map[string]interface{}
+
 // setup sets up zap test logging. It returns a
 // suitable URL for mock endpoints and a teardown function.
 func setup(t *testing.T) (string, func()) {

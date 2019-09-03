@@ -11,6 +11,90 @@ import (
 	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
 )
 
+func TestQuery_ClusterName(t *testing.T) {
+	gock.Intercept()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+
+	u, teardown := setup(t)
+	defer teardown()
+
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	if err != nil {
+		t.Fatalf("couldn't create elastic client: %s", err)
+	}
+	q := NewQuery(esClient)
+
+	const want = "mycluster"
+
+	gock.New(u).
+		Get("/_cluster/health").
+		Reply(http.StatusOK).
+		JSON(b{
+			"active_primary_shards": 0,
+			"active_shards": 0,
+			"active_shards_percent_as_number": 100.0,
+			"cluster_name": want,
+			"delayed_unassigned_shards": 0,
+			"initializing_shards": 0,
+			"number_of_data_nodes": 1,
+			"number_of_in_flight_fetch": 0,
+			"number_of_nodes": 1,
+			"number_of_pending_tasks": 0,
+			"relocating_shards": 0,
+			"status": "green",
+			"task_max_waiting_in_queue_millis": 0,
+			"timed_out": false,
+			"unassigned_shards": 0,
+		})
+	got, err := q.ClusterName(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
+	assert.True(t, gock.IsDone())
+}
+
+func TestQuery_ClusterHealth(t *testing.T) {
+	gock.Intercept()
+	defer gock.OffAll()
+	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+
+	u, teardown := setup(t)
+	defer teardown()
+
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	if err != nil {
+		t.Fatalf("couldn't create elastic client: %s", err)
+	}
+	q := NewQuery(esClient)
+
+	const clusterName = "mycluster"
+
+	gock.New(u).
+		Get("/_cluster/health").
+		Reply(http.StatusOK).
+		JSON(b{
+			"active_primary_shards": 0,
+			"active_shards": 0,
+			"active_shards_percent_as_number": 100.0,
+			"cluster_name": clusterName,
+			"delayed_unassigned_shards": 0,
+			"initializing_shards": 0,
+			"number_of_data_nodes": 1,
+			"number_of_in_flight_fetch": 0,
+			"number_of_nodes": 1,
+			"number_of_pending_tasks": 0,
+			"relocating_shards": 0,
+			"status": "green",
+			"task_max_waiting_in_queue_millis": 0,
+			"timed_out": false,
+			"unassigned_shards": 0,
+		})
+	health, err := q.ClusterHealth(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, clusterName, health.ClusterName)
+	assert.True(t, gock.IsDone())
+}
+
 func TestQuery_Nodes(t *testing.T) {
 	gock.Intercept()
 	defer gock.OffAll()
@@ -23,7 +107,7 @@ func TestQuery_Nodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewQuery(esClient)
+	q := NewQuery(esClient)
 
 	gock.New(u).
 		Get("/_nodes/stats").
@@ -46,7 +130,7 @@ func TestQuery_Nodes(t *testing.T) {
 		Type("json").
 		BodyString(loadTestData(t, "cat_shards.json"))
 
-	nodes, err := s.Nodes(context.Background())
+	nodes, err := q.Nodes(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, gock.IsDone())
 	assert.Len(t, nodes, 9)
@@ -66,7 +150,7 @@ func TestQuery_Node(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewQuery(esClient)
+	q := NewQuery(esClient)
 
 	gock.New(u).
 		Get(fmt.Sprintf("/_nodes/%s/stats", nodeName)).
@@ -89,7 +173,7 @@ func TestQuery_Node(t *testing.T) {
 		Type("json").
 		BodyString(loadTestData(t, "cat_shards.json"))
 
-	n, err := s.Node(context.Background(), nodeName)
+	n, err := q.Node(context.Background(), nodeName)
 	assert.NoError(t, err)
 	assert.True(t, gock.IsDone())
 	assert.NotNil(t, n)
@@ -119,7 +203,7 @@ func TestQuery_GetSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("couldn't create elastic client: %s", err)
 	}
-	s := NewQuery(esClient)
+	q := NewQuery(esClient)
 
 	t.Run("all", func(t *testing.T) {
 		gock.New(u).
@@ -127,7 +211,7 @@ func TestQuery_GetSnapshots(t *testing.T) {
 			Reply(http.StatusOK).
 			Type("json").
 			BodyString(loadTestData(t, "snapshots_get_all.json"))
-		snapshots, err := s.GetSnapshots(context.Background(), repoName)
+		snapshots, err := q.GetSnapshots(context.Background(), repoName)
 		assert.NoError(t, err)
 		assert.True(t, gock.IsDone())
 		assert.NotNil(t, snapshots)
@@ -143,7 +227,7 @@ func TestQuery_GetSnapshots(t *testing.T) {
 			Reply(http.StatusOK).
 			Type("json").
 			BodyString(loadTestData(t, "snapshots_get_some.json"))
-		snapshots, err := s.GetSnapshots(context.Background(), repoName, snapshot1, snapshot2)
+		snapshots, err := q.GetSnapshots(context.Background(), repoName, snapshot1, snapshot2)
 		assert.NoError(t, err)
 		assert.True(t, gock.IsDone())
 		assert.Len(t, snapshots, 2)

@@ -108,6 +108,8 @@ func main() {
 	if err != nil {
 		logger.Fatal("error creating Elasticsearch client", zap.Error(err))
 	}
+	esQuery := elasticsearch.NewQuery(esClient)
+	esCmd := elasticsearch.NewCommand(esClient)
 
 	// Setup healthchecks
 	health := healthcheck.NewMetricsHandler(prometheus.DefaultRegisterer, prometheus.BuildFQName(metrics.Namespace, "", lifecycler.Subsystem))
@@ -176,14 +178,14 @@ func main() {
 		cleanupFns := make([]func(), 0)
 
 		if event.LifecycleTransition == lifecycle.TransitionLaunching {
-			cond = launchCondition(logger, esClient)
+			cond = launchCondition(logger, esQuery)
 
 		} else if event.LifecycleTransition == lifecycle.TransitionTerminating {
-			cond = terminateCondition(logger, esClient)
+			cond = terminateCondition(logger, esQuery)
 
 			// Do some initial work if the instance is terminating.
 			// First, fetch info about this Elasticsearch node.
-			n, err := elasticsearch.NewQuery(esClient).Node(ctx, event.InstanceID)
+			n, err := esQuery.Node(ctx, event.InstanceID)
 			if err != nil {
 				return err
 			} else if n == nil {
@@ -191,15 +193,13 @@ func main() {
 				return nil
 			}
 
-			esCommand := elasticsearch.NewCommand(esClient)
-
 			// Drain any index shards from node by settings a shard allocation exclusion.
-			if err := esCommand.Drain(ctx, n.Name); err != nil {
+			if err := esCmd.Drain(ctx, n.Name); err != nil {
 				return err
 			}
 			cleanupFns = append(cleanupFns, func() { // Clean up the exclusion once the node is dead.
 				logger.Debug("cleaning up shard allocation exclusions settings")
-				if err := esCommand.Undrain(ctx, n.Name); err != nil {
+				if err := esCmd.Undrain(ctx, n.Name); err != nil {
 					logger.Fatal("error undraining node", zap.Error(err))
 				}
 			})
@@ -301,10 +301,10 @@ func main() {
 
 // terminateCondition returns function that checks if a AWS Autoscaling Group scale down event
 // should be allowed to proceed.
-func terminateCondition(logger *zap.Logger, client *elastic.Client) func(context.Context, *lifecycle.Event) (bool, error) {
+func terminateCondition(logger *zap.Logger, q *elasticsearch.Query) func(context.Context, *lifecycle.Event) (bool, error) {
 	return func(ctx context.Context, event *lifecycle.Event) (bool, error) {
 		// Check cluster health
-		resp, err := client.ClusterHealth().Do(ctx)
+		resp, err := q.ClusterHealth(ctx)
 		switch {
 		case err != nil:
 			return false, err
@@ -317,7 +317,7 @@ func terminateCondition(logger *zap.Logger, client *elastic.Client) func(context
 		}
 
 		// Wait for all index shards to drain off this node.
-		if n, err := elasticsearch.NewQuery(client).Node(ctx, event.InstanceID); err != nil {
+		if n, err := q.Node(ctx, event.InstanceID); err != nil {
 			return false, err
 		} else if len(n.Indices()) > 0 {
 			logger.Info("condition failed: node still has shards")
@@ -331,10 +331,10 @@ func terminateCondition(logger *zap.Logger, client *elastic.Client) func(context
 
 // launchCondition returns function that checks if a AWS Autoscaling Group scale up event
 // should be allowed to proceed.
-func launchCondition(logger *zap.Logger, client *elastic.Client) func(context.Context, *lifecycle.Event) (bool, error) {
+func launchCondition(logger *zap.Logger, q *elasticsearch.Query) func(context.Context, *lifecycle.Event) (bool, error) {
 	return func(ctx context.Context, event *lifecycle.Event) (bool, error) {
 		// Check cluster health
-		resp, err := client.ClusterHealth().Do(ctx)
+		resp, err := q.ClusterHealth(ctx)
 		switch {
 		case err != nil:
 			return false, err

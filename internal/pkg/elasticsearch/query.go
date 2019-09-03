@@ -33,6 +33,15 @@ var (
 		Buckets:   prometheus.DefBuckets,
 	}, []string{metrics.LabelStatus})
 
+	// QueryClusterHealthDuration is the Prometheus metric for Query.ClusterHealth() durations.
+	QueryClusterHealthDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: metrics.Namespace,
+		Subsystem: querySubsystem,
+		Name:      "cluster_health_request_duration_seconds",
+		Help:      "Requests to get Elasticsearch cluster health.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{metrics.LabelStatus})
+
 	// QueryNodesDuration is the Prometheus metric for Query.Nodes() and Node() durations.
 	QueryNodesDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: metrics.Namespace,
@@ -80,6 +89,23 @@ func (q *Query) ClusterName(ctx context.Context) (name string, err error) {
 	}
 	name = resp.ClusterName
 	logger.Debug("got cluster name", zap.String("cluster", name))
+	return
+}
+
+// ClusterHealth return the health of the Elasticsearch cluster.
+func (q *Query) ClusterHealth(ctx context.Context) (health *elastic.ClusterHealthResponse, err error) {
+	timer := metrics.NewVecTimer(QueryClusterHealthDuration)
+	defer timer.ObserveErr(err)
+
+	logger := ctxlog.L(ctx).Named("Query.ClusterHealth")
+
+	logger.Debug("getting cluster health")
+	health, err = q.client.ClusterHealth().Do(ctx)
+	if err != nil {
+		logger.Error("error getting cluster name", zap.Error(err))
+	} else {
+		logger.Debug("got cluster health")
+	}
 	return
 }
 
