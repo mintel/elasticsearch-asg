@@ -18,7 +18,6 @@ const (
 	sortedNodeNameList = "bar,foo"
 )
 
-
 func TestCommand_Drain(t *testing.T) {
 	gock.Intercept()
 	defer gock.OffAll()

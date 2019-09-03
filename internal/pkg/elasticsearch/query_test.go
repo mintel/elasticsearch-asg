@@ -31,21 +31,21 @@ func TestQuery_ClusterName(t *testing.T) {
 		Get("/_cluster/health").
 		Reply(http.StatusOK).
 		JSON(b{
-			"active_primary_shards": 0,
-			"active_shards": 0,
-			"active_shards_percent_as_number": 100.0,
-			"cluster_name": want,
-			"delayed_unassigned_shards": 0,
-			"initializing_shards": 0,
-			"number_of_data_nodes": 1,
-			"number_of_in_flight_fetch": 0,
-			"number_of_nodes": 1,
-			"number_of_pending_tasks": 0,
-			"relocating_shards": 0,
-			"status": "green",
+			"active_primary_shards":            0,
+			"active_shards":                    0,
+			"active_shards_percent_as_number":  100.0,
+			"cluster_name":                     want,
+			"delayed_unassigned_shards":        0,
+			"initializing_shards":              0,
+			"number_of_data_nodes":             1,
+			"number_of_in_flight_fetch":        0,
+			"number_of_nodes":                  1,
+			"number_of_pending_tasks":          0,
+			"relocating_shards":                0,
+			"status":                           "green",
 			"task_max_waiting_in_queue_millis": 0,
-			"timed_out": false,
-			"unassigned_shards": 0,
+			"timed_out":                        false,
+			"unassigned_shards":                0,
 		})
 	got, err := q.ClusterName(context.Background())
 	assert.NoError(t, err)
@@ -73,21 +73,21 @@ func TestQuery_ClusterHealth(t *testing.T) {
 		Get("/_cluster/health").
 		Reply(http.StatusOK).
 		JSON(b{
-			"active_primary_shards": 0,
-			"active_shards": 0,
-			"active_shards_percent_as_number": 100.0,
-			"cluster_name": clusterName,
-			"delayed_unassigned_shards": 0,
-			"initializing_shards": 0,
-			"number_of_data_nodes": 1,
-			"number_of_in_flight_fetch": 0,
-			"number_of_nodes": 1,
-			"number_of_pending_tasks": 0,
-			"relocating_shards": 0,
-			"status": "green",
+			"active_primary_shards":            0,
+			"active_shards":                    0,
+			"active_shards_percent_as_number":  100.0,
+			"cluster_name":                     clusterName,
+			"delayed_unassigned_shards":        0,
+			"initializing_shards":              0,
+			"number_of_data_nodes":             1,
+			"number_of_in_flight_fetch":        0,
+			"number_of_nodes":                  1,
+			"number_of_pending_tasks":          0,
+			"relocating_shards":                0,
+			"status":                           "green",
 			"task_max_waiting_in_queue_millis": 0,
-			"timed_out": false,
-			"unassigned_shards": 0,
+			"timed_out":                        false,
+			"unassigned_shards":                0,
 		})
 	health, err := q.ClusterHealth(context.Background())
 	assert.NoError(t, err)
