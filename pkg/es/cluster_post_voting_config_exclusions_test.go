@@ -1,14 +1,14 @@
 package es
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
 	"github.com/olivere/elastic/v7"
 	"github.com/stretchr/testify/assert"
-
 	gock "gopkg.in/h2non/gock.v1"
+
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
 )
 
 func TestClusterPostVotingConfigExclusions(t *testing.T) {
@@ -21,7 +21,10 @@ func TestClusterPostVotingConfigExclusions(t *testing.T) {
 		localhost = "http://127.0.0.1:9200"
 		nodeName  = "foobar"
 	)
-	defer gock.Off()
+
+	ctx, _, teardown := testutil.ClientTestSetup(t)
+	defer teardown()
+
 	gock.New(localhost).
 		Post("/_cluster/voting_config_exclusions/" + nodeName).
 		Reply(http.StatusAccepted)
@@ -29,7 +32,7 @@ func TestClusterPostVotingConfigExclusions(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	_, err = NewClusterPostVotingConfigExclusion(client).Node(nodeName).Do(context.Background())
+	_, err = NewClusterPostVotingConfigExclusion(client).Node(nodeName).Do(ctx)
 	assert.NoError(t, err)
 	assert.True(t, gock.IsDone())
 }

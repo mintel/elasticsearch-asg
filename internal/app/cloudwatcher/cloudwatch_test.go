@@ -4,15 +4,14 @@ package cloudwatcher
 
 import (
 	"context"
-	"io/ioutil"
 	"net/http"
-	"path/filepath"
 	"testing"
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
 	"github.com/stretchr/testify/assert"    // Test assertions
-	"go.uber.org/zap/zaptest"               // Logging for tests
-	gock "gopkg.in/h2non/gock.v1"           // Mock HTTP endpoints
+
+	// Logging for tests
+	gock "gopkg.in/h2non/gock.v1" // Mock HTTP endpoints
 
 	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,8 +20,8 @@ import (
 
 	"github.com/mintel/elasticsearch-asg/internal/app/cloudwatcher/mocks" // Mocked AWS client(s)
 	"github.com/mintel/elasticsearch-asg/internal/pkg/elasticsearch"      // Complex Elasticsearch services
-	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"                      // Logger from context
-	"github.com/mintel/elasticsearch-asg/pkg/str"                         // String utilities
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
+	"github.com/mintel/elasticsearch-asg/pkg/str" // String utilities
 )
 
 const (
@@ -31,16 +30,15 @@ const (
 )
 
 func TestMakeCloudwatchData(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	ctx := ctxlog.WithLogger(context.Background(), logger)
+	ctx, _, teardown := testutil.ClientTestSetup(t)
+	defer teardown()
 
-	defer gock.Off()
 	gock.New(localhost).Get("/_nodes/_all/_all").
-		Reply(http.StatusOK).Type("json").BodyString(loadTestData(t, "nodes_info.json"))
+		Reply(http.StatusOK).Type("json").BodyString(testutil.LoadTestData("nodes_info.json"))
 	gock.New(localhost).Get("/_nodes/stats").
-		Reply(http.StatusOK).Type("json").BodyString(loadTestData(t, "nodes_stats.json"))
+		Reply(http.StatusOK).Type("json").BodyString(testutil.LoadTestData("nodes_stats.json"))
 	gock.New(localhost).Get("/_cluster/settings").
-		Reply(http.StatusOK).Type("json").BodyString(loadTestData(t, "cluster_settings.json"))
+		Reply(http.StatusOK).Type("json").BodyString(testutil.LoadTestData("cluster_settings.json"))
 	gock.New(localhost).Get("/_cat/shards").
 		Reply(http.StatusOK).Type("json").BodyString("[]")
 
@@ -257,14 +255,4 @@ func TestMakeCloudwatchData(t *testing.T) {
 	}
 
 	assert.True(t, gock.IsDone())
-}
-
-// loadTestData is help to load test data from the `testdata` directory.
-func loadTestData(t *testing.T, name string) string {
-	path := filepath.Join("testdata", name) // relative path
-	bytes, err := ioutil.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to load test data file %s: %s", name, err)
-	}
-	return string(bytes)
 }

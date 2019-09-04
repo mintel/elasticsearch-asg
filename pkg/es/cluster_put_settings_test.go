@@ -5,16 +5,24 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"
 )
 
 func TestClusterPutSettingsService(t *testing.T) {
+	logger, teardownLogging := testutil.TestLogger(t)
+	defer teardownLogging()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx = ctxlog.WithLogger(ctx, logger)
+
 	container, client, err := runElasticsearch(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer container.Close()
-
-	ctx := context.Background()
 
 	resp, err := NewClusterPutSettingsService(client).Transient("cluster.routing.allocation.exclude._name", "foo").Persistent("cluster.routing.allocation.exclude._name", "bar").Do(ctx)
 	if assert.NoError(t, err) {

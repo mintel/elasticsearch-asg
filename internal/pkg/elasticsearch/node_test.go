@@ -6,11 +6,12 @@ import (
 
 	"github.com/stretchr/testify/assert" // Test assertions e.g. equality
 
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
 	"github.com/mintel/elasticsearch-asg/pkg/es" // Elasticsearch client extensions
 )
 
 func TestNode_Indices(t *testing.T) {
-	data := loadTestData("cat_shards.json")
+	data := testutil.LoadTestData("cat_shards.json")
 	var shards es.CatShardsResponse
 	err := json.Unmarshal([]byte(data), &shards)
 	if !assert.NoError(t, err) {

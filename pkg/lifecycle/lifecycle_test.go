@@ -12,13 +12,12 @@ import (
 	"github.com/google/uuid"             // Generate UUIDs
 	"github.com/stretchr/testify/assert" // Test assertions e.g. equality
 	"github.com/stretchr/testify/mock"   // Tools for mocking things
-	"go.uber.org/zap"                    // Logging
-	"go.uber.org/zap/zaptest"            // Logging for tests
 
 	// AWS clients and stuff.
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
 	"github.com/mintel/elasticsearch-asg/pkg/lifecycle/mocks" // Mocked AWS clients.
 )
 
@@ -34,35 +33,28 @@ var (
 	hGlobalTimeout = 100 * hTimeout
 )
 
-func setup(t *testing.T) (*mocks.AutoScalingAPI, context.Context, func(), func()) {
-	logger := zaptest.NewLogger(t)
-	f1 := zap.ReplaceGlobals(logger)
-	f2 := zap.RedirectStdLog(logger)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
+func setup(t *testing.T) (*mocks.AutoScalingAPI, context.Context, func()) {
 	originalCommBufD := commBufD
 	originalTimeoutIncrement := timeoutIncrement
 
 	commBufD = 0
 	timeoutIncrement = time.Millisecond
 
+	ctx, _, teardown := testutil.ClientTestSetup(t)
+
 	m := &mocks.AutoScalingAPI{}
 	m.Test(t)
 
-	teardown := func() {
-		cancel()
-		f2()
-		f1()
+	teardown2 := func() {
+		teardown()
 		commBufD = originalCommBufD
 		timeoutIncrement = originalTimeoutIncrement
-		_ = logger.Sync()
 	}
-	return m, ctx, cancel, teardown
+	return m, ctx, teardown2
 }
 
 func TestNewEventFromMsg(t *testing.T) {
-	m, ctx, _, teardown := setup(t)
+	m, ctx, teardown := setup(t)
 	defer teardown()
 
 	mIn := &autoscaling.DescribeLifecycleHooksInput{
@@ -113,7 +105,7 @@ func TestNewEventFromMsg(t *testing.T) {
 }
 
 func TestNewEventFromMsg_testEvent(t *testing.T) {
-	m, ctx, _, teardown := setup(t)
+	m, ctx, teardown := setup(t)
 	defer teardown()
 
 	mIn := &autoscaling.DescribeLifecycleHooksInput{
@@ -154,7 +146,7 @@ func TestNewEventFromMsg_testEvent(t *testing.T) {
 }
 
 func TestNewEventFromMsg_badTransition(t *testing.T) {
-	m, ctx, _, teardown := setup(t)
+	m, ctx, teardown := setup(t)
 	defer teardown()
 
 	mIn := &autoscaling.DescribeLifecycleHooksInput{
@@ -194,7 +186,7 @@ func TestNewEventFromMsg_badTransition(t *testing.T) {
 }
 
 func TestNewEventFromMsg_errUnmarshal(t *testing.T) {
-	m, ctx, _, teardown := setup(t)
+	m, ctx, teardown := setup(t)
 	defer teardown()
 
 	mIn := &autoscaling.DescribeLifecycleHooksInput{
@@ -234,7 +226,7 @@ func TestNewEventFromMsg_errUnmarshal(t *testing.T) {
 }
 
 func TestKeepAlive(t *testing.T) {
-	m, ctx, _, teardown := setup(t)
+	m, ctx, teardown := setup(t)
 	defer teardown()
 
 	mIn := &autoscaling.RecordLifecycleActionHeartbeatInput{

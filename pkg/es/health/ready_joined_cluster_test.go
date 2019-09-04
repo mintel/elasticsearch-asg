@@ -7,13 +7,16 @@ import (
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
 	"github.com/stretchr/testify/assert"    // Test assertion e.g. equality
 	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
+
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
 )
 
 func TestCheckReadyJoinedCluster_passing(t *testing.T) {
-	ctx, u, teardown := setup(t)
+	defer setTestTimeout()
+	ctx, _, teardown := testutil.ClientTestSetup(t)
 	defer teardown()
-	defer gock.Off()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+	const u = "http://127.0.0.1:9200"
+
 	check := CheckReadyJoinedCluster(ctx, u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").
@@ -29,10 +32,11 @@ func TestCheckReadyJoinedCluster_passing(t *testing.T) {
 }
 
 func TestCheckReadyJoinedCluster_error(t *testing.T) {
-	ctx, u, teardown := setup(t)
+	defer setTestTimeout()
+	ctx, _, teardown := testutil.ClientTestSetup(t)
 	defer teardown()
-	defer gock.Off()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+	const u = "http://127.0.0.1:9200"
+
 	check := CheckReadyJoinedCluster(ctx, u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").
@@ -44,10 +48,11 @@ func TestCheckReadyJoinedCluster_error(t *testing.T) {
 }
 
 func TestCheckReadyJoinedCluster_not_joined(t *testing.T) {
-	ctx, u, teardown := setup(t)
+	defer setTestTimeout()
+	ctx, _, teardown := testutil.ClientTestSetup(t)
 	defer teardown()
-	defer gock.Off()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+	const u = "http://127.0.0.1:9200"
+
 	check := CheckReadyJoinedCluster(ctx, u)
 	gock.New(u).
 		Get("/_cluster/state/_all/_all").

@@ -10,10 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"    // Test assertions e.g. equality
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 	gock "gopkg.in/h2non/gock.v1" // HTTP endpoint mocking
 
-	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
 )
 
 type QueryTestSuite struct {
@@ -22,6 +21,7 @@ type QueryTestSuite struct {
 	SUT *Query // System Under Test
 
 	teardown func()
+	logger   *zap.Logger
 	ctx      context.Context
 	uri      string
 }
@@ -31,29 +31,18 @@ func TestQuery(t *testing.T) {
 }
 
 func (suite *QueryTestSuite) SetupTest() {
-	logger := zaptest.NewLogger(suite.T())
-	teardownLogger1 := zap.ReplaceGlobals(logger)
-	teardownLogger2 := zap.RedirectStdLog(logger)
-	gock.Intercept() // Intercept HTTP requests sent via the default client.
-	gock.Observe(gockObserver(logger))
+	ctx, logger, teardown := testutil.ClientTestSetup(suite.T())
+	suite.ctx = ctx
+	suite.logger = logger
 	suite.uri = "http://127.0.0.1:9200"
-	ctx, cancel := context.WithCancel(context.Background())
-	suite.ctx = ctxlog.WithLogger(ctx, logger)
 	esClient, err := elastic.NewSimpleClient(elastic.SetURL(suite.uri))
 	if err != nil {
 		panic(err)
 	}
 	suite.SUT = NewQuery(esClient)
 	suite.teardown = func() {
-		cancel()
 		esClient.Stop()
-		gock.OffAll()
-		gock.Observe(nil)
-		teardownLogger2()
-		teardownLogger1()
-		if err := logger.Sync(); err != nil {
-			panic(err)
-		}
+		teardown()
 	}
 }
 

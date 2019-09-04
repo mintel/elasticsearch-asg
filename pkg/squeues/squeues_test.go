@@ -19,11 +19,13 @@ import (
 	"github.com/google/uuid"            // Generate UUIDs
 	"github.com/stretchr/testify/mock"  // Mocking
 	"github.com/stretchr/testify/suite" // Test suite for setup and teardown
+	"go.uber.org/zap"
 
 	// AWS clients and stuff
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
 	"github.com/mintel/elasticsearch-asg/pkg/squeues/mocks" // Mocked interfaces
 )
 
@@ -66,8 +68,11 @@ type DispatcherTestSuite struct {
 	originalDefaultPollTime                 time.Duration
 	originalSendVisRandomizationFactor      float64
 
-	SUT     *Dispatcher // System Under Test
-	MockSQS *mocks.SQSAPI
+	SUT      *Dispatcher // System Under Test
+	MockSQS  *mocks.SQSAPI
+	Ctx      context.Context
+	Logger   *zap.Logger
+	Teardown func()
 }
 
 // SetupTest runs before each test.
@@ -88,6 +93,11 @@ func (suite *DispatcherTestSuite) SetupTest() {
 	DefaultPollTime = testDefaultPollTime
 	sendVisRandomizationFactor = testSendVisRandomizationFactor
 
+	ctx, logger, teardown := testutil.ClientTestSetup(suite.T())
+	suite.Ctx = ctx
+	suite.Logger = logger
+	suite.Teardown = teardown
+
 	// Set up mock AWS SQS client.
 	suite.MockSQS = &mocks.SQSAPI{}
 	suite.MockSQS.Test(suite.T())
@@ -100,6 +110,8 @@ func (suite *DispatcherTestSuite) SetupTest() {
 func (suite *DispatcherTestSuite) TearDownTest() {
 	// Assert that the mock was called as expected.
 	suite.MockSQS.AssertExpectations(suite.T())
+
+	suite.Teardown()
 
 	// Reset original global package vars.
 	DefaultInitialVisibilityTimeout = suite.originalDefaultInitialVisibilityTimeout
@@ -223,7 +235,7 @@ func (suite *DispatcherTestSuite) TestRunWithContext() {
 	totalExpectedRunTime += failAfter
 
 	// Run the Dispatcher with a timeout.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(suite.Ctx)
 	shouldFinishWithin := time.Duration(totalExpectedRunTime * 2) // Add a little buffer time.
 	doCancel := time.AfterFunc(shouldFinishWithin, cancel)
 	err := suite.SUT.RunWithContext(ctx, handler)
@@ -251,7 +263,7 @@ func (suite *DispatcherTestSuite) TestReceiveMessages() {
 			VisibilityTimeout:   aws.Int64(numSeconds(ceilSeconds(suite.SUT.InitialVisibilityTimeout))),
 			WaitTimeSeconds:     aws.Int64(numSeconds(suite.SUT.PollTime)),
 		}).Return(&sqs.ReceiveMessageOutput{Messages: messages}, error(nil)).Once()
-		result, err := suite.SUT.receiveMessages(context.Background(), numMessages)
+		result, err := suite.SUT.receiveMessages(suite.Ctx, numMessages)
 		suite.NoError(err)
 		suite.Equal(messages, result)
 	})
@@ -264,7 +276,7 @@ func (suite *DispatcherTestSuite) TestReceiveMessages() {
 			VisibilityTimeout:   aws.Int64(numSeconds(ceilSeconds(suite.SUT.InitialVisibilityTimeout))),
 			WaitTimeSeconds:     aws.Int64(numSeconds(suite.SUT.PollTime)),
 		}).Return((*sqs.ReceiveMessageOutput)(nil), errors.New(errMsg)).Once()
-		result, err := suite.SUT.receiveMessages(context.Background(), numMessages)
+		result, err := suite.SUT.receiveMessages(suite.Ctx, numMessages)
 		suite.EqualError(err, errMsg)
 		suite.Nil(result)
 	})
@@ -279,7 +291,7 @@ func (suite *DispatcherTestSuite) TestDeleteMessage() {
 			QueueUrl:      aws.String(testQueueURL),
 			ReceiptHandle: msg.ReceiptHandle,
 		}).Return(&sqs.DeleteMessageOutput{}, error(nil)).Once()
-		err := suite.SUT.deleteMessage(context.Background(), *msg.ReceiptHandle)
+		err := suite.SUT.deleteMessage(suite.Ctx, *msg.ReceiptHandle)
 		suite.NoError(err)
 	})
 
@@ -289,7 +301,7 @@ func (suite *DispatcherTestSuite) TestDeleteMessage() {
 			QueueUrl:      aws.String(testQueueURL),
 			ReceiptHandle: msg.ReceiptHandle,
 		}).Return((*sqs.DeleteMessageOutput)(nil), errors.New(errMsg)).Once()
-		err := suite.SUT.deleteMessage(context.Background(), *msg.ReceiptHandle)
+		err := suite.SUT.deleteMessage(suite.Ctx, *msg.ReceiptHandle)
 		suite.EqualError(err, errMsg)
 	})
 }
@@ -305,7 +317,7 @@ func (suite *DispatcherTestSuite) TestUpdateMessageVisibility() {
 			ReceiptHandle:     msg.ReceiptHandle,
 			VisibilityTimeout: aws.Int64(numSeconds(ceilSeconds(d))),
 		}).Return(&sqs.ChangeMessageVisibilityOutput{}, error(nil)).Once()
-		err := suite.SUT.updateMessageVisibility(context.Background(), *msg.ReceiptHandle, d)
+		err := suite.SUT.updateMessageVisibility(suite.Ctx, *msg.ReceiptHandle, d)
 		suite.NoError(err)
 	})
 
@@ -316,7 +328,7 @@ func (suite *DispatcherTestSuite) TestUpdateMessageVisibility() {
 			ReceiptHandle:     msg.ReceiptHandle,
 			VisibilityTimeout: aws.Int64(numSeconds(ceilSeconds(d))),
 		}).Return((*sqs.ChangeMessageVisibilityOutput)(nil), errors.New(errMsg)).Once()
-		err := suite.SUT.updateMessageVisibility(context.Background(), *msg.ReceiptHandle, d)
+		err := suite.SUT.updateMessageVisibility(suite.Ctx, *msg.ReceiptHandle, d)
 		suite.EqualError(err, errMsg)
 	})
 }
@@ -368,7 +380,7 @@ func (suite *DispatcherTestSuite) TestNotifyChangeMessageVisibility() {
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(suite.Ctx)
 	wg := sync.WaitGroup{}
 	defer func() {
 		cancel()

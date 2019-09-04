@@ -5,16 +5,24 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"
 )
 
 func TestCatShardsService(t *testing.T) {
+	logger, teardownLogging := testutil.TestLogger(t)
+	defer teardownLogging()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx = ctxlog.WithLogger(ctx, logger)
+
 	container, client, err := runElasticsearch(t)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer container.Close()
-
-	ctx := context.Background()
 
 	_, err = client.CreateIndex("foobar").Do(ctx)
 	if !assert.NoError(t, err) {
