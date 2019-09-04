@@ -8,26 +8,63 @@ import (
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
 	"github.com/stretchr/testify/assert"    // Test assertions e.g. equality
-	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
+	"github.com/stretchr/testify/suite"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
+	gock "gopkg.in/h2non/gock.v1" // HTTP endpoint mocking
+
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"
 )
 
-func TestQuery_ClusterName(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+type QueryTestSuite struct {
+	suite.Suite
 
-	u, teardown := setup(t)
-	defer teardown()
+	SUT *Query // System Under Test
 
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+	teardown func()
+	ctx      context.Context
+	uri      string
+}
+
+func TestQuery(t *testing.T) {
+	suite.Run(t, new(QueryTestSuite))
+}
+
+func (suite *QueryTestSuite) SetupTest() {
+	logger := zaptest.NewLogger(suite.T())
+	teardownLogger1 := zap.ReplaceGlobals(logger)
+	teardownLogger2 := zap.RedirectStdLog(logger)
+	gock.Intercept() // Intercept HTTP requests sent via the default client.
+	gock.Observe(gockObserver(logger))
+	suite.uri = "http://127.0.0.1:9200"
+	ctx, cancel := context.WithCancel(context.Background())
+	suite.ctx = ctxlog.WithLogger(ctx, logger)
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(suite.uri))
 	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
+		panic(err)
 	}
-	q := NewQuery(esClient)
+	suite.SUT = NewQuery(esClient)
+	suite.teardown = func() {
+		cancel()
+		esClient.Stop()
+		gock.OffAll()
+		gock.Observe(nil)
+		teardownLogger2()
+		teardownLogger1()
+		if err := logger.Sync(); err != nil {
+			panic(err)
+		}
+	}
+}
 
+func (suite *QueryTestSuite) TearDownTest() {
+	suite.teardown()
+}
+
+func (suite *QueryTestSuite) TestQuery_ClusterName() {
 	const want = "mycluster"
 
-	gock.New(u).
+	gock.New(suite.uri).
 		Get("/_cluster/health").
 		Reply(http.StatusOK).
 		JSON(b{
@@ -47,29 +84,16 @@ func TestQuery_ClusterName(t *testing.T) {
 			"timed_out":                        false,
 			"unassigned_shards":                0,
 		})
-	got, err := q.ClusterName(context.Background())
-	assert.NoError(t, err)
-	assert.Equal(t, want, got)
-	assert.True(t, gock.IsDone())
+	got, err := suite.SUT.ClusterName(suite.ctx)
+	suite.NoError(err)
+	suite.Equal(want, got)
+	suite.True(gock.IsDone())
 }
 
-func TestQuery_ClusterHealth(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	q := NewQuery(esClient)
-
+func (suite *QueryTestSuite) TestQuery_ClusterHealth() {
 	const clusterName = "mycluster"
 
-	gock.New(u).
+	gock.New(suite.uri).
 		Get("/_cluster/health").
 		Reply(http.StatusOK).
 		JSON(b{
@@ -89,148 +113,108 @@ func TestQuery_ClusterHealth(t *testing.T) {
 			"timed_out":                        false,
 			"unassigned_shards":                0,
 		})
-	health, err := q.ClusterHealth(context.Background())
-	assert.NoError(t, err)
-	assert.Equal(t, clusterName, health.ClusterName)
-	assert.True(t, gock.IsDone())
+	health, err := suite.SUT.ClusterHealth(suite.ctx)
+	suite.NoError(err)
+	suite.Equal(clusterName, health.ClusterName)
+	suite.True(gock.IsDone())
 }
 
-func TestQuery_Nodes(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	q := NewQuery(esClient)
-
-	gock.New(u).
+func (suite *QueryTestSuite) TestQuery_Nodes() {
+	gock.New(suite.uri).
 		Get("/_nodes/stats").
 		Reply(200).
 		Type("json").
-		BodyString(loadTestData(t, "nodes_stats.json"))
-	gock.New(u).
+		BodyString(loadTestData("nodes_stats.json"))
+	gock.New(suite.uri).
 		Get("/_nodes/_all/_all").
 		Reply(200).
 		Type("json").
-		BodyString(loadTestData(t, "nodes_info.json"))
-	gock.New(u).
+		BodyString(loadTestData("nodes_info.json"))
+	gock.New(suite.uri).
 		Get("/_cluster/settings").
 		Reply(200).
 		Type("json").
-		BodyString(loadTestData(t, "cluster_settings.json"))
-	gock.New(u).
+		BodyString(loadTestData("cluster_settings.json"))
+	gock.New(suite.uri).
 		Get("/_cat/shards").
 		Reply(200).
 		Type("json").
-		BodyString(loadTestData(t, "cat_shards.json"))
+		BodyString(loadTestData("cat_shards.json"))
 
-	nodes, err := q.Nodes(context.Background())
-	assert.NoError(t, err)
-	assert.True(t, gock.IsDone())
-	assert.Len(t, nodes, 9)
+	nodes, err := suite.SUT.Nodes(suite.ctx)
+	suite.NoError(err)
+	suite.True(gock.IsDone())
+	suite.Len(nodes, 9)
 }
 
-func TestQuery_Node(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
+func (suite *QueryTestSuite) TestQuery_Node() {
 	const nodeName = "i-0f5c6d4d61d41b9fc"
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	q := NewQuery(esClient)
-
-	gock.New(u).
+	gock.New(suite.uri).
 		Get(fmt.Sprintf("/_nodes/%s/stats", nodeName)).
 		Reply(http.StatusOK).
 		Type("json").
-		BodyString(loadTestData(t, "nodes_stats_"+nodeName+".json"))
-	gock.New(u).
+		BodyString(loadTestData(fmt.Sprintf("nodes_stats_%s.json", nodeName)))
+	gock.New(suite.uri).
 		Get(fmt.Sprintf("/_nodes/%s/_all", nodeName)).
 		Reply(http.StatusOK).
 		Type("json").
-		BodyString(loadTestData(t, "nodes_info_"+nodeName+".json"))
-	gock.New(u).
+		BodyString(loadTestData(fmt.Sprintf("nodes_info_%s.json", nodeName)))
+	gock.New(suite.uri).
 		Get("/_cluster/settings").
 		Reply(http.StatusOK).
 		Type("json").
-		BodyString(loadTestData(t, "cluster_settings.json"))
-	gock.New(u).
+		BodyString(loadTestData("cluster_settings.json"))
+	gock.New(suite.uri).
 		Get("/_cat/shards").
 		Reply(http.StatusOK).
 		Type("json").
-		BodyString(loadTestData(t, "cat_shards.json"))
+		BodyString(loadTestData("cat_shards.json"))
 
-	n, err := q.Node(context.Background(), nodeName)
-	assert.NoError(t, err)
-	assert.True(t, gock.IsDone())
-	assert.NotNil(t, n)
-	assert.Equal(t, nodeName, n.Name)
-	assert.Equal(t, []string{"data"}, n.Roles)
-	assert.Equal(t, map[string]string{
+	n, err := suite.SUT.Node(suite.ctx, nodeName)
+	suite.NoError(err)
+	suite.True(gock.IsDone())
+	suite.NotNil(n)
+	suite.Equal(nodeName, n.Name)
+	suite.Equal([]string{"data"}, n.Roles)
+	suite.Equal(map[string]string{
 		"aws_availability_zone":  "us-east-2a",
 		"aws_instance_type":      "i3.large",
 		"aws_instance_lifecycle": "spot",
 		"xpack.installed":        "true",
 		"aws_instance_family":    "i3",
 	}, n.Attributes)
-	assert.Len(t, n.Shards, 1)
+	suite.Len(n.Shards, 1)
 }
 
-func TestQuery_GetSnapshots(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+func (suite *QueryTestSuite) TestQuery_GetSnapshots() {
+	const (
+		repoName  = "myrepo"
+		snapshot1 = "analytics-20190902t040001"
+		snapshot2 = "analytics-20190903t040001"
+	)
 
-	u, teardown := setup(t)
-	defer teardown()
-
-	const repoName = "myrepo"
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	q := NewQuery(esClient)
-
-	t.Run("all", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("all", func() {
+		gock.New(suite.uri).
 			Get(fmt.Sprintf("/_snapshot/%s/_all", repoName)).
 			Reply(http.StatusOK).
 			Type("json").
-			BodyString(loadTestData(t, "snapshots_get_all.json"))
-		snapshots, err := q.GetSnapshots(context.Background(), repoName)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
-		assert.NotNil(t, snapshots)
+			BodyString(loadTestData("snapshots_get_all.json"))
+		snapshots, err := suite.SUT.GetSnapshots(suite.ctx, repoName)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
+		suite.NotNil(snapshots)
 	})
 
-	t.Run("some", func(t *testing.T) {
-		const (
-			snapshot1 = "analytics-20190902t040001"
-			snapshot2 = "analytics-20190903t040001"
-		)
-		gock.New(u).
+	suite.Run("some", func() {
+		gock.New(suite.uri).
 			Get(fmt.Sprintf("/_snapshot/%s/%s,%s", repoName, snapshot1, snapshot2)).
 			Reply(http.StatusOK).
 			Type("json").
-			BodyString(loadTestData(t, "snapshots_get_some.json"))
-		snapshots, err := q.GetSnapshots(context.Background(), repoName, snapshot1, snapshot2)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
-		assert.Len(t, snapshots, 2)
+			BodyString(loadTestData("snapshots_get_some.json"))
+		snapshots, err := suite.SUT.GetSnapshots(suite.ctx, repoName, snapshot1, snapshot2)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
+		suite.Len(snapshots, 2)
 	})
 }
 

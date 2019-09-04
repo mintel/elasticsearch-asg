@@ -8,135 +8,151 @@ import (
 	"time"
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client
-	"github.com/stretchr/testify/assert"    // Test assertions e.g. equality
-	gock "gopkg.in/h2non/gock.v1"           // HTTP endpoint mocking
+	"github.com/stretchr/testify/suite"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
+	gock "gopkg.in/h2non/gock.v1" // HTTP endpoint mocking
+
+	"github.com/mintel/elasticsearch-asg/pkg/ctxlog"
 )
 
-const (
-	node1Name          = "foo"
-	node2Name          = "bar"
-	sortedNodeNameList = "bar,foo"
-)
+type CommandTestSuite struct {
+	suite.Suite
 
-func TestCommand_Drain(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
+	SUT *Command // System Under Test
 
-	u, teardown := setup(t)
-	defer teardown()
+	teardown func()
+	ctx      context.Context
+	uri      string
+}
 
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
+func TestCommand(t *testing.T) {
+	suite.Run(t, new(CommandTestSuite))
+}
+
+func (suite *CommandTestSuite) SetupTest() {
+	logger := zaptest.NewLogger(suite.T())
+	teardownLogger1 := zap.ReplaceGlobals(logger)
+	teardownLogger2 := zap.RedirectStdLog(logger)
+	gock.Intercept() // Intercept HTTP requests sent via the default client.
+	gock.Observe(gockObserver(logger))
+	suite.uri = "http://127.0.0.1:9200"
+	ctx, cancel := context.WithCancel(context.Background())
+	suite.ctx = ctxlog.WithLogger(ctx, logger)
+	esClient, err := elastic.NewSimpleClient(elastic.SetURL(suite.uri))
 	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
+		panic(err)
 	}
-	cmd := NewCommand(esClient)
+	suite.SUT = NewCommand(esClient)
+	suite.teardown = func() {
+		cancel()
+		esClient.Stop()
+		gock.OffAll()
+		gock.Observe(nil)
+		teardownLogger2()
+		teardownLogger1()
+		if err := logger.Sync(); err != nil {
+			panic(err)
+		}
+	}
+}
+
+func (suite *CommandTestSuite) TearDownTest() {
+	suite.teardown()
+}
+
+func (suite *CommandTestSuite) TestCommand_Drain() {
+	const (
+		node1Name          = "foo"
+		node2Name          = "bar"
+		sortedNodeNameList = "bar,foo"
+	)
 
 	// Drain a node.
-	t.Run("drain-first", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("drain-first", func() {
+		gock.New(suite.uri).
 			Get("/_cluster/settings").
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{}})
-		gock.New(u).
+		gock.New(suite.uri).
 			Put("/_cluster/settings").
 			JSON(b{"transient": b{"cluster.routing.allocation.exclude._name": node1Name}}).
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": node1Name}}}}}})
-		err = cmd.Drain(context.Background(), node1Name)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
+		err := suite.SUT.Drain(suite.ctx, node1Name)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
 	})
 
 	// Draining the same node again shouldn't need to PUT any settings.
-	t.Run("drain-first-again", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("drain-first-again", func() {
+		gock.New(suite.uri).
 			Get("/_cluster/settings").
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": node1Name}}}}}})
-		err := cmd.Drain(context.Background(), node1Name)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
+		err := suite.SUT.Drain(suite.ctx, node1Name)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
 	})
 
 	// Draining a second node results in a comma-separated list in sorted order.
-	t.Run("drain-second", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("drain-second", func() {
+		gock.New(suite.uri).
 			Get("/_cluster/settings").
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": node1Name}}}}}})
-		gock.New(u).
+		gock.New(suite.uri).
 			Put("/_cluster/settings").
 			JSON(b{"transient": b{"cluster.routing.allocation.exclude._name": sortedNodeNameList}}).
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": sortedNodeNameList}}}}}})
-		err := cmd.Drain(context.Background(), node2Name)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
+		err := suite.SUT.Drain(suite.ctx, node2Name)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
 	})
 }
 
-func TestCommand_Undrain(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	s := NewCommand(esClient)
+func (suite *CommandTestSuite) TestCommand_Undrain() {
+	const (
+		node1Name          = "foo"
+		node2Name          = "bar"
+		sortedNodeNameList = "bar,foo"
+	)
 
 	// Undrain a node.
-	t.Run("undrain-first", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("undrain-first", func() {
+		gock.New(suite.uri).
 			Get("/_cluster/settings").
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": sortedNodeNameList}}}}}})
-		gock.New(u).
+		gock.New(suite.uri).
 			Put("/_cluster/settings").
 			JSON(b{"transient": b{"cluster.routing.allocation.exclude._name": node2Name}}).
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": node2Name}}}}}})
-		err = s.Undrain(context.Background(), node1Name)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
+		err := suite.SUT.Undrain(suite.ctx, node1Name)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
 	})
 
 	// Undrain last node.
-	t.Run("undrain-last", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("undrain-last", func() {
+		gock.New(suite.uri).
 			Get("/_cluster/settings").
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{"cluster": b{"routing": b{"allocation": b{"exclude": b{"_name": node2Name}}}}}})
-		gock.New(u).
+		gock.New(suite.uri).
 			Put("/_cluster/settings").
 			JSON(b{"transient": b{"cluster.routing.allocation.exclude._name": nil}}).
 			Reply(http.StatusOK).
 			JSON(b{"persistent": b{}, "transient": b{}})
-		err := s.Undrain(context.Background(), node2Name)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
+		err := suite.SUT.Undrain(suite.ctx, node2Name)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
 	})
 }
 
-func TestCommand_EnsureSnapshotRepo(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	cmd := NewCommand(esClient)
-
+func (suite *CommandTestSuite) TestCommand_EnsureSnapshotRepo() {
 	const (
 		repoName = "myrepo"
 		repoType = "s3"
@@ -145,8 +161,8 @@ func TestCommand_EnsureSnapshotRepo(t *testing.T) {
 		"bucket": "foobar",
 	}
 
-	t.Run("not-exist", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("not-exist", func() {
+		gock.New(suite.uri).
 			Get(fmt.Sprintf("/_snapshot/%s", repoName)).
 			Reply(http.StatusNotFound).
 			JSON(b{
@@ -162,18 +178,18 @@ func TestCommand_EnsureSnapshotRepo(t *testing.T) {
 				},
 				"status": 404,
 			})
-		gock.New(u).
+		gock.New(suite.uri).
 			Put(fmt.Sprintf("/_snapshot/%s", repoName)).
 			JSON(b{"type": repoType, "settings": repoSettings}).
 			Reply(http.StatusOK).
 			JSON(b{"acknowledged": true})
-		err := cmd.EnsureSnapshotRepo(context.Background(), repoName, repoType, repoSettings)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
+		err := suite.SUT.EnsureSnapshotRepo(suite.ctx, repoName, repoType, repoSettings)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
 	})
 
-	t.Run("does-exist", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("does-exist", func() {
+		gock.New(suite.uri).
 			Get(fmt.Sprintf("/_snapshot/%s", repoName)).
 			Reply(http.StatusOK).
 			JSON(b{
@@ -182,13 +198,13 @@ func TestCommand_EnsureSnapshotRepo(t *testing.T) {
 					"settings": repoSettings,
 				},
 			})
-		err := cmd.EnsureSnapshotRepo(context.Background(), repoName, repoType, repoSettings)
-		assert.NoError(t, err)
-		assert.True(t, gock.IsDone())
+		err := suite.SUT.EnsureSnapshotRepo(suite.ctx, repoName, repoType, repoSettings)
+		suite.NoError(err)
+		suite.True(gock.IsDone())
 	})
 
-	t.Run("wrong-type", func(t *testing.T) {
-		gock.New(u).
+	suite.Run("wrong-type", func() {
+		gock.New(suite.uri).
 			Get(fmt.Sprintf("/_snapshot/%s", repoName)).
 			Reply(http.StatusOK).
 			JSON(b{
@@ -197,26 +213,13 @@ func TestCommand_EnsureSnapshotRepo(t *testing.T) {
 					"settings": repoSettings,
 				},
 			})
-		err := cmd.EnsureSnapshotRepo(context.Background(), repoName, repoType, repoSettings)
-		assert.Error(t, err)
-		assert.True(t, gock.IsDone())
+		err := suite.SUT.EnsureSnapshotRepo(suite.ctx, repoName, repoType, repoSettings)
+		suite.Error(err)
+		suite.True(gock.IsDone())
 	})
 }
 
-func TestCommand_CreateSnapshot(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	cmd := NewCommand(esClient)
-
+func (suite *CommandTestSuite) TestCommand_CreateSnapshot() {
 	const (
 		repoName     = "myrepo"
 		format       = "analytics-20060102t150405"
@@ -224,88 +227,49 @@ func TestCommand_CreateSnapshot(t *testing.T) {
 	)
 	now := time.Date(2019, 9, 3, 4, 0, 1, 0, time.UTC)
 
-	gock.New(u).
+	gock.New(suite.uri).
 		Put(fmt.Sprintf("/_snapshot/%s/%s", repoName, snapshotName)).
 		MatchParam("wait_for_completion", "true").
 		Reply(http.StatusOK).
 		JSON(b{"acknowledged": true})
-	err = cmd.CreateSnapshot(context.Background(), repoName, format, now)
-	assert.NoError(t, err)
-	assert.True(t, gock.IsDone())
+	err := suite.SUT.CreateSnapshot(suite.ctx, repoName, format, now)
+	suite.NoError(err)
+	suite.True(gock.IsDone())
 }
 
-func TestCommand_DeleteSnapshot(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	cmd := NewCommand(esClient)
-
+func (suite *CommandTestSuite) TestCommand_DeleteSnapshot() {
 	const (
 		repoName     = "myrepo"
 		snapshotName = "analytics-20190903t040001"
 	)
 
-	gock.New(u).
+	gock.New(suite.uri).
 		Delete(fmt.Sprintf("/_snapshot/%s/%s", repoName, snapshotName)).
 		Reply(http.StatusOK).
 		JSON(b{"acknowledged": true})
-	err = cmd.DeleteSnapshot(context.Background(), repoName, snapshotName)
-	assert.NoError(t, err)
-	assert.True(t, gock.IsDone())
+	err := suite.SUT.DeleteSnapshot(suite.ctx, repoName, snapshotName)
+	suite.NoError(err)
+	suite.True(gock.IsDone())
 }
 
-func TestCommand_ExcludeFromVoting(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	cmd := NewCommand(esClient)
-
+func (suite *CommandTestSuite) TestCommand_ExcludeFromVoting() {
 	const nodeName = "node1"
 
-	gock.New(u).
+	gock.New(suite.uri).
 		Post(fmt.Sprintf("/_cluster/voting_config_exclusions/%s", nodeName)).
 		Reply(http.StatusOK).
 		JSON(b{"acknowledged": true})
-	err = cmd.ExcludeFromVoting(context.Background(), nodeName)
-	assert.NoError(t, err)
-	assert.True(t, gock.IsDone())
+	err := suite.SUT.ExcludeFromVoting(suite.ctx, nodeName)
+	suite.NoError(err)
+	suite.True(gock.IsDone())
 }
 
-func TestCommand_ClearVotingExclusions(t *testing.T) {
-	gock.Intercept()
-	defer gock.OffAll()
-	// gock.Observe(gock.DumpRequest) // Log HTTP requests during test.
-
-	u, teardown := setup(t)
-	defer teardown()
-
-	esClient, err := elastic.NewSimpleClient(elastic.SetURL(u))
-	if err != nil {
-		t.Fatalf("couldn't create elastic client: %s", err)
-	}
-	cmd := NewCommand(esClient)
-
-	gock.New(u).
+func (suite *CommandTestSuite) TestCommand_ClearVotingExclusions() {
+	gock.New(suite.uri).
 		Delete("_cluster/voting_config_exclusions").
 		Reply(http.StatusOK).
 		JSON(b{"acknowledged": true})
-	err = cmd.ClearVotingExclusions(context.Background())
-	assert.NoError(t, err)
-	assert.True(t, gock.IsDone())
+	err := suite.SUT.ClearVotingExclusions(suite.ctx)
+	suite.NoError(err)
+	suite.True(gock.IsDone())
 }

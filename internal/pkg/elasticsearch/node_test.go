@@ -10,7 +10,7 @@ import (
 )
 
 func TestNode_Indices(t *testing.T) {
-	data := loadTestData(t, "cat_shards.json")
+	data := loadTestData("cat_shards.json")
 	var shards es.CatShardsResponse
 	err := json.Unmarshal([]byte(data), &shards)
 	if !assert.NoError(t, err) {
