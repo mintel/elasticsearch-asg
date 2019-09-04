@@ -29,8 +29,8 @@ import (
 	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"           // Common logging setup func
 	"github.com/mintel/elasticsearch-asg/internal/pkg/elasticsearch" // Complex Elasticsearch services
 	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"       // Prometheus metrics
-	"github.com/mintel/elasticsearch-asg/pkg/lifecycle" // Handle AWS Autoscaling Group lifecycle hook event messages.
-	"github.com/mintel/elasticsearch-asg/pkg/squeues"   // SQS message dispatcher
+	"github.com/mintel/elasticsearch-asg/pkg/lifecycle"              // Handle AWS Autoscaling Group lifecycle hook event messages.
+	"github.com/mintel/elasticsearch-asg/pkg/squeues"                // SQS message dispatcher
 )
 
 // Request retry count/timeouts.
