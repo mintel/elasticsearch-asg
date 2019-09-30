@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 
 	"github.com/mintel/elasticsearch-asg/pkg/es"
-	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
 
 var (
@@ -78,11 +77,7 @@ func NewNodeStats(
 		persistent.HasHost(s.Host))
 	if !excluded {
 		for k, v := range s.Attributes {
-			if sv, ok := transient.Attr[k]; ok && str.In(fmt.Sprint(v), sv...) {
-				excluded = true
-				break
-			}
-			if sv, ok := persistent.Attr[k]; ok && str.In(fmt.Sprint(v), sv...) {
+			if transient.HasAttr(k, fmt.Sprint(v)) || persistent.HasAttr(k, fmt.Sprint(v)) {
 				excluded = true
 				break
 			}

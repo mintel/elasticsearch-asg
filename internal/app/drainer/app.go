@@ -24,7 +24,6 @@ import (
 	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"
 	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"
 	"github.com/mintel/elasticsearch-asg/pkg/events"
-	"github.com/mintel/elasticsearch-asg/pkg/str"
 )
 
 const (
@@ -316,7 +315,7 @@ func (app *App) updateClusterState(ctx context.Context) error {
 	if err := app.clients.ESFacade.UndrainNodes(ctx, toUndrain); err != nil {
 		return errors.Wrap(err, "error while undraining nodes")
 	}
-	removed = str.Uniq(removed...)
+	removed = uniqStrings(removed...)
 
 	// Emit events for nodes added/removed/empty/not-empty.
 	toWait := make(emitWaiter, 0, len(added)+len(removed)+len(newState.Nodes))
@@ -338,4 +337,16 @@ func (app *App) updateClusterState(ctx context.Context) error {
 	toWait.Wait()
 
 	return nil
+}
+
+func uniqStrings(strs ...string) []string {
+	out := make([]string, 0, len(strs))
+	m := make(map[string]struct{}, len(strs))
+	for _, s := range strs {
+		if _, ok := m[s]; !ok {
+			out = append(out, s)
+			m[s] = struct{}{}
+		}
+	}
+	return out
 }
