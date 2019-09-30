@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.uber.org/zap"
+	"go.uber.org/zap" // Logging.
 	"go.uber.org/zap/zaptest"
-	gock "gopkg.in/h2non/gock.v1"
+	gock "gopkg.in/h2non/gock.v1" // HTTP request mocking.
 )
 
 // TestLogger returns a zap Logger that logs all messages to the given testing.TB.

@@ -7,7 +7,7 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 )
 
 func Test_bucket_Start(t *testing.T) {

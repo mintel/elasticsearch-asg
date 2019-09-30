@@ -4,10 +4,10 @@ import (
 	"sort"
 	"strings"
 
-	elastic "github.com/olivere/elastic/v7"
-	"go.uber.org/zap"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"go.uber.org/zap"                       // Logging.
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 // ClusterState represents the state of an Elasticsearch

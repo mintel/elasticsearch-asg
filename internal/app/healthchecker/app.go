@@ -4,13 +4,13 @@ import (
 	"os"
 	"path/filepath"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	elastic "github.com/olivere/elastic/v7"          // Elasticsearch client.
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
+	"go.uber.org/zap"                                // Logging.
+	kingpin "gopkg.in/alecthomas/kingpin.v2"         // Command line flag parsing.
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"
-	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"     // Common command line app tools.
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Prometheus metrics tools.
 )
 
 const (

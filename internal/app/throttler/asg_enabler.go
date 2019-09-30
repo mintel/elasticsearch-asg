@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
+	"github.com/looplab/fsm" // Finite state machine.
+	"go.uber.org/zap"        // Logging.
 
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
-	"github.com/looplab/fsm"
 )
 
 type asgEnablerClient interface {

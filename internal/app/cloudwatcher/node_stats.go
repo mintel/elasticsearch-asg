@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 var (

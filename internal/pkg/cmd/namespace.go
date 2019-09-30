@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )
 
 // Namespace is the namespace to be used for Prometheus

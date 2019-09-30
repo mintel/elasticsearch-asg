@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/olebedev/emitter"
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	"github.com/olebedev/emitter"                    // Event bus.
+	elastic "github.com/olivere/elastic/v7"          // Elasticsearch client.
+	"github.com/pkg/errors"                          // Wrap errors with stacktrace.
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
+	"go.uber.org/zap"                                // Logging.
+	"golang.org/x/sync/errgroup"                     // Cancel multiple goroutines if one fails.
+	kingpin "gopkg.in/alecthomas/kingpin.v2"         // Command line flag parsing.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
@@ -21,9 +21,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/sqsiface"
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"
-	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"
-	"github.com/mintel/elasticsearch-asg/pkg/events"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"     // Common command line app tools.
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Prometheus metrics tools.
+	"github.com/mintel/elasticsearch-asg/pkg/events"           // AWS CloudWatch Events.
 )
 
 const (

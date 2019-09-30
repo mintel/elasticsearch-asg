@@ -4,12 +4,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-
-	// "crypto/tls"
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
+	"github.com/stretchr/testify/assert"             // Test assertions e.g. equality.
 )
 
 func TestInstrumentHTTP(t *testing.T) {

@@ -7,14 +7,14 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/tidwall/gjson"
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
+	"github.com/tidwall/gjson"           // Dynamic JSON parsing.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/defaults"
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil" // Testing utilities.
+	"github.com/mintel/elasticsearch-asg/pkg/es"                // Extensions to the Elasticsearch client.
 )
 
 func Test_compressPayload(t *testing.T) {

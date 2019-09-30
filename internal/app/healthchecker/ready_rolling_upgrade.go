@@ -4,12 +4,12 @@ import (
 	"context"
 	"sort"
 
-	"github.com/mintel/healthcheck" // Healthchecks framework
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/pkg/errors"
-	"go.uber.org/zap" // Logging
+	"github.com/mintel/healthcheck"         // Healthchecks framework.
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/pkg/errors"                 // Wrap errors with stacktrace.
+	"go.uber.org/zap"                       // Logging.
 
-	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 // CheckReadyRollingUpgrade checks that Elasticsearch has recovered from a rolling upgrade.

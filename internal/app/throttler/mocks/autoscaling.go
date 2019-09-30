@@ -1,7 +1,7 @@
 package mocks
 
 import (
-	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/mock" // Mocking for tests.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/defaults"

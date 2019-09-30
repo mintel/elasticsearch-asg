@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/mock"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
+	"github.com/stretchr/testify/mock"               // Mocking for tests.
 
 	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics/mocks"
 )

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 )
 
 func TestConfig_MinInterval(t *testing.T) {

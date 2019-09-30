@@ -5,8 +5,8 @@ import (
 	goerr "errors"
 	"time"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/pkg/errors"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/pkg/errors"                 // Wrap errors with stacktrace.
 )
 
 var (

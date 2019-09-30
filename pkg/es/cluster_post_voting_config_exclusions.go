@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/url"
 
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
 )
 
 // ClusterPostVotingConfigExclusion removes all voting configuration exclusions,

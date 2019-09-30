@@ -6,13 +6,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 
 	"github.com/mintel/elasticsearch-asg/internal/app/throttler/mocks"
-	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil" // Testing utilities.
 )
 
 func TestNewAutoScalingGroupEnabler(t *testing.T) {

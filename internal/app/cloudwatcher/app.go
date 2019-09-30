@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/dgraph-io/ristretto"
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	"github.com/dgraph-io/ristretto"                 // Cache.
+	elastic "github.com/olivere/elastic/v7"          // Elasticsearch client.
+	"github.com/pkg/errors"                          // Wrap errors with stacktrace.
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
+	"go.uber.org/zap"                                // Logging.
+	kingpin "gopkg.in/alecthomas/kingpin.v2"         // Command line flag parsing.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
@@ -19,9 +19,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/ec2iface"
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"
-	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"     // Common command line app tools.
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Prometheus metrics tools.
+	"github.com/mintel/elasticsearch-asg/pkg/es"               // Extensions to the Elasticsearch client.
 )
 
 const (

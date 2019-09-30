@@ -3,10 +3,10 @@ package es
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/tidwall/gjson"
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
+	"github.com/tidwall/gjson"           // Dynamic JSON parsing.
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil" // Testing utilities.
 )
 
 func TestNewShardAllocationSettings(t *testing.T) {

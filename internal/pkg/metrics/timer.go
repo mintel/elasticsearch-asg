@@ -3,7 +3,7 @@ package metrics
 import (
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )
 
 // VecTimer is a helper type to time functions.

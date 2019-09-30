@@ -1,13 +1,14 @@
 package mocks
 
 import (
+	"github.com/stretchr/testify/mock" // Mocking for tests.
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/defaults"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/private/protocol/query"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/sqsiface"
-	"github.com/stretchr/testify/mock"
 )
 
 type SQS struct {

@@ -3,7 +3,7 @@
 package metrics
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )
 
 // DefaultObjectives are default objectives for Prometheus Summary metrics.

@@ -6,12 +6,12 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/mattn/go-isatty"
-	"github.com/mintel/healthcheck"
-	"go.uber.org/zap"
+	"github.com/mattn/go-isatty"    // Check if running in a terminal.
+	"github.com/mintel/healthcheck" // Healthchecks framework.
+	"go.uber.org/zap"               // Logging.
 	"go.uber.org/zap/zapcore"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 

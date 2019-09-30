@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 
-	"github.com/mintel/elasticsearch-asg/pkg/events"
+	"github.com/mintel/elasticsearch-asg/pkg/events" // AWS CloudWatch Events.
 )
 
 func Example() {

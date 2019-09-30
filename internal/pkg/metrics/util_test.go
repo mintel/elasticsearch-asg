@@ -3,8 +3,8 @@ package metrics
 import (
 	"testing"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
+	"github.com/stretchr/testify/assert"             // Test assertions e.g. equality.
 )
 
 // assertMetrics asserts that a prometheus.Gatherer has an expected

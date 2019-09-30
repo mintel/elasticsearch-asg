@@ -6,18 +6,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/ristretto"        // Cache.
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/stretchr/testify/assert"    // Test assertions e.g. equality.
+	gock "gopkg.in/h2non/gock.v1"           // HTTP request mocking.
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 
-	"github.com/dgraph-io/ristretto"
 	"github.com/mintel/elasticsearch-asg/internal/app/cloudwatcher/mocks"
-
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/assert"
-	gock "gopkg.in/h2non/gock.v1"
-
-	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil" // Testing utilities.
 )
 
 func TestApp_getClusterName(t *testing.T) {

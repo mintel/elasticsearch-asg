@@ -4,11 +4,11 @@ import (
 	"net/http"
 	"testing"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/assert"
-	gock "gopkg.in/h2non/gock.v1"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/stretchr/testify/assert"    // Test assertions e.g. equality.
+	gock "gopkg.in/h2non/gock.v1"           // HTTP request mocking.
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil" // Testing utilities.
 )
 
 func TestClusterGetSettingsService(t *testing.T) {

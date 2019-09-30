@@ -4,10 +4,10 @@ import (
 	"errors"
 	"time"
 
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line flag parsing.
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"
-	"github.com/mintel/elasticsearch-asg/pkg/retention"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd" // Common command line app tools.
+	"github.com/mintel/elasticsearch-asg/pkg/retention"    // How long to keep backups.
 )
 
 const (

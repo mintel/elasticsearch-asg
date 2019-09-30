@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/tidwall/gjson"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/tidwall/gjson"              // Dynamic JSON parsing.
 )
 
 // ClusterGetSettingsService gets the settings of an Elasticsearch cluster.

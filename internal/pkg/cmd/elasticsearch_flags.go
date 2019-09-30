@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"time"
 
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
 )
 
 // ElasticsearchFlags represents a base set of flags for

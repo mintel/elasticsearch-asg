@@ -3,10 +3,9 @@ package cloudwatcher
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 )
 

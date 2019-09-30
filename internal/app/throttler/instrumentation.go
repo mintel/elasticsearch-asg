@@ -1,7 +1,7 @@
 package throttler
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )
 
 // Instrumentation holds Prometheus metrics specific to

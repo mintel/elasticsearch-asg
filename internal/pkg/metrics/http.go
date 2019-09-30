@@ -3,7 +3,7 @@ package metrics
 import (
 	"net/http"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 

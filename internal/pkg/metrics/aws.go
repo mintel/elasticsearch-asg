@@ -4,7 +4,7 @@ import (
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )
 
 // InstrumentAWS adds Prometheus metrics to an AWS client or session.

@@ -1,7 +1,7 @@
 package cloudwatcher
 
 import (
-	"gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/floats" // Float math tools.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"

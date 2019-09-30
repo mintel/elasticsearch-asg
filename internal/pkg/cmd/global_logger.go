@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"go.uber.org/zap"
+	"go.uber.org/zap" // Logging.
 	"go.uber.org/zap/zapcore"
 )
 

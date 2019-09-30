@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
 )
 
 // compressPayload compresses the payload of an AWS request before it is sent.

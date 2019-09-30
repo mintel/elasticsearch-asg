@@ -3,9 +3,9 @@ package healthchecker
 import (
 	"context"
 
-	"github.com/mintel/healthcheck"
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/pkg/errors"
+	"github.com/mintel/healthcheck"         // Healthchecks framework.
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/pkg/errors"                 // Wrap errors with stacktrace.
 )
 
 // CheckLiveHEAD returns a liveness healthcheck that

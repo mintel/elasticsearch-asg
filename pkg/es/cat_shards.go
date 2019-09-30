@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
 	"github.com/olivere/elastic/v7/uritemplates"
 )
 

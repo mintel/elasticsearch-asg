@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tidwall/gjson"
+	"github.com/tidwall/gjson" // Dynamic JSON parsing.
 )
 
 const (

@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
-	elastic "github.com/olivere/elastic/v7"
-	"golang.org/x/sync/errgroup"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"golang.org/x/sync/errgroup"            // Cancel multiple goroutines if one fails.
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 // ClusterStateGetter queries an Elasticsearch cluster to return

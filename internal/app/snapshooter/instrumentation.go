@@ -1,9 +1,9 @@
 package snapshooter
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/metrics" // Prometheus metrics tools.
 )
 
 // Instrumentation holds Prometheus metrics specific to

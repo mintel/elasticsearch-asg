@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/olebedev/emitter"
-	"github.com/stretchr/testify/assert"
+	"github.com/olebedev/emitter"        // Event bus.
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
 	"github.com/mintel/elasticsearch-asg/internal/app/drainer/mocks"
-	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
-	"github.com/mintel/elasticsearch-asg/pkg/events"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil" // Testing utilities.
+	"github.com/mintel/elasticsearch-asg/pkg/events"            // AWS CloudWatch Events.
 )
 
 func TestCloudWatchEventEmitter_Run(t *testing.T) {

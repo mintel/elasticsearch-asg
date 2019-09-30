@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws/awserr"
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
 )
 
 // ElasticsearchStatusCode returns the HTTP status code from an Elasticsearch client error as a string.

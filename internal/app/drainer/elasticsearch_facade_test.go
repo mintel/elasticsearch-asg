@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"testing"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/suite"
-	gock "gopkg.in/h2non/gock.v1"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/stretchr/testify/suite"     // Test suite.
+	gock "gopkg.in/h2non/gock.v1"           // HTTP request mocking.
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil" // Testing utilities.
+	"github.com/mintel/elasticsearch-asg/pkg/es"                // Extensions to the Elasticsearch client.
 )
 
 type ElasticsearchFacadeTestSuite struct {

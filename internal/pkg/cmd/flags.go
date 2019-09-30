@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line flag parsing.
 )
 
 // Flagger defines command line flags and args.

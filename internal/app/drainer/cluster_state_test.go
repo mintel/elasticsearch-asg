@@ -4,12 +4,12 @@ import (
 	"sort"
 	"testing"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/stretchr/testify/assert"    // Test assertions e.g. equality.
+	"github.com/stretchr/testify/require"   // Like assert but fails the test.
+	"github.com/tidwall/gjson"              // Dynamic JSON parsing.
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 func TestNewClusterState(t *testing.T) {

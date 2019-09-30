@@ -4,9 +4,9 @@ import (
 	"net/url"
 	"time"
 
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line flag parsing.
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/cmd" // Common command line app tools.
 )
 
 const (

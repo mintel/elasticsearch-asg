@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/stretchr/testify/suite"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/stretchr/testify/suite"     // Test suite.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 
-	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil"
-	"github.com/mintel/elasticsearch-asg/pkg/es"
+	"github.com/mintel/elasticsearch-asg/internal/pkg/testutil" // Testing utilities.
+	"github.com/mintel/elasticsearch-asg/pkg/es"                // Extensions to the Elasticsearch client.
 )
 
 const (

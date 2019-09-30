@@ -6,15 +6,15 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/olebedev/emitter"
-	"github.com/pkg/errors"
-	"go.uber.org/zap"
+	"github.com/olebedev/emitter" // Event bus.
+	"github.com/pkg/errors"       // Wrap errors with stacktrace.
+	"go.uber.org/zap"             // Logging.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/sqsiface"
 
-	"github.com/mintel/elasticsearch-asg/pkg/events"
+	"github.com/mintel/elasticsearch-asg/pkg/events" // AWS CloudWatch Events.
 )
 
 // CloudWatchEventEmitter consumes CloudWatch events from an SQS

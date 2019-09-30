@@ -1,8 +1,8 @@
 package cloudwatcher
 
 import (
-	"github.com/dgraph-io/ristretto"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/dgraph-io/ristretto"                 // Cache.
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 )
 
 // Instrumentation holds Prometheus metrics specific to

@@ -5,10 +5,11 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/mintel/elasticsearch-asg/pkg/es"
-	elastic "github.com/olivere/elastic/v7"
-	"github.com/pkg/errors"
-	"golang.org/x/sync/errgroup"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/pkg/errors"                 // Wrap errors with stacktrace.
+	"golang.org/x/sync/errgroup"            // Cancel multiple goroutines if one fails.
+
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 // ElasticsearchFacadeIface is an interface for Elasticsearch

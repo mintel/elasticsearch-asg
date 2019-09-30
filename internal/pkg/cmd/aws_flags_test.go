@@ -3,9 +3,9 @@ package cmd
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert" // Test assertions e.g. equality.
 
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	kingpin "gopkg.in/alecthomas/kingpin.v2" // Command line flag parsing.
 )
 
 func TestNewAWSFlags(t *testing.T) {

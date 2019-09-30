@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/url"
 
-	elastic "github.com/olivere/elastic/v7"
+	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
 )
 
 // ClusterDeleteVotingConfigExclusion removes all voting configuration exclusions,

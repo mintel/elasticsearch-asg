@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/ristretto"
-	"go.uber.org/zap"
+	"github.com/dgraph-io/ristretto" // Cache.
+	"go.uber.org/zap"                // Logging.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/awserr"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling/autoscalingiface"
 
-	"github.com/mintel/elasticsearch-asg/pkg/events"
+	"github.com/mintel/elasticsearch-asg/pkg/events" // AWS CloudWatch Events.
 )
 
 var (
