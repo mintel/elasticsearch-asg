@@ -5,9 +5,8 @@ import (
 )
 
 // Durations like day, week, month, and year are hard
-// to specify due to the vagaries of calenders, leap seconds,
-// the changing shape of the earth, planetary orbits, etc.
-// Which is why they aren't specified in the "time" package.
+// to specify due to the vagaries of calenders, leap seconds, etc,
+// which is why they aren't specified in the Golang "time" package.
 // We're going to make some assumptions about those durations
 // here because we aren't launching rockets or whatever.
 

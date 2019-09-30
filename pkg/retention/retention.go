@@ -1,12 +1,13 @@
 // Package retention implements a stateless algorithm for determining which
 // of a sequence of backups to retain with decreasing granularity over time.
 // It is based on the retention algorithm used by Acronis Disaster Recovery Service.
-// See: https://kb.acronis.com/content/58486
+//
+// See also: https://kb.acronis.com/content/58486
 //
 // Since both "backups" and "buckets" start with "b", hereafter the word
 // "snapshots" will be used instead of "backups" for readability.
 //
-// Snapshots using this method should follow few principals:
+// Snapshots using this method should follow a few principals:
 // 1. Use Config.MinInterval to schedule the snapshot jobs.
 // 2. If a previous snapshot job has not finished yet, the next one doesn't run.
 //
@@ -36,9 +37,9 @@ import (
 // Keep takes a list of times that snapshots were taken at and
 // returns which ones should be kept.
 //
-// The retention policy does not use the current time, but is
-// counted from the last snapshot time. Times will be returned
-// in sorted order.
+// The retention policy is based on the last snapshot time,
+// not use the current time.
+// Times will be returned in sorted order.
 func Keep(c Config, snapshots []time.Time) []time.Time {
 	shots := make(timeseries, 0, len(snapshots)+1)
 	shots.Push(snapshots...)
@@ -131,7 +132,7 @@ func Keep(c Config, snapshots []time.Time) []time.Time {
 	return keep
 }
 
-// Delete is the reverse of Keep, returning snapshots to delete.
+// Delete is the inverse of Keep, returning snapshots to delete.
 func Delete(c Config, snapshots []time.Time) []time.Time {
 	keep := Keep(c, snapshots)
 	shots := make(timeseries, 0, len(snapshots))
@@ -141,13 +142,16 @@ func Delete(c Config, snapshots []time.Time) []time.Time {
 }
 
 // redistributeBackups moves snapshots between buckets
-// to more evenly distribute them. An ideal (but unlikely)
+// to more evenly distribute them. The ideal (but unlikely)
 // result of this algorithm is that each bucket will
 // have 1 backup.
 func redistributeBackups(buckets buckets) {
+	// close is 1/4 the width of the smallest bucket.
 	close := buckets[len(buckets)-1].Width / 4
+
 	for i := 0; i < len(buckets)-1; i++ {
 		b, nb := buckets[i], buckets[i+1]
+
 		if len(b.Snapshots) == 0 {
 			// If this bucket has no snapshots and next newest
 			// bucket has a backup that is close to the boundary
