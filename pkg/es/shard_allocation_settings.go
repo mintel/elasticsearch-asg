@@ -1,6 +1,7 @@
 package es
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -28,6 +29,7 @@ func NewShardAllocationExcludeSettings(settings *gjson.Result) *ShardAllocationE
 	settings.Get(ShardAllocExcludeSetting).ForEach(func(key, value gjson.Result) bool {
 		k := key.String()
 		v := strings.Split(value.String(), ",")
+		sort.Strings(v)
 		switch k {
 		case "_name":
 			s.Name = v
@@ -74,4 +76,34 @@ func (s *ShardAllocationExcludeSettings) Map() map[string]*string {
 		}
 	}
 	return m
+}
+
+// HasName returns true if the given node name is excluded.
+func (s *ShardAllocationExcludeSettings) HasName(name string) bool {
+	return strInSorted(s.Name, name)
+}
+
+// HasHost returns true if the given hostname is excluded.
+func (s *ShardAllocationExcludeSettings) HasHost(host string) bool {
+	return strInSorted(s.Host, host)
+}
+
+// HasIP returns true if the given IP address is excluded.
+func (s *ShardAllocationExcludeSettings) HasIP(ip string) bool {
+	return strInSorted(s.IP, ip)
+}
+
+// HasAttr returns true if the given attribute value is excluded.
+func (s *ShardAllocationExcludeSettings) HasAttr(attr, value string) bool {
+	a, ok := s.Attr[attr]
+	if !ok {
+		return false
+	}
+	return strInSorted(a, value)
+}
+
+// strInSorted if s is in sorted slice strs.
+func strInSorted(a []string, x string) bool {
+	i := sort.SearchStrings(a, x)
+	return i < len(a) && a[i] == x
 }

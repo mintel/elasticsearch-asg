@@ -70,12 +70,12 @@ func NewNodeStats(
 		return nil, errInconsistentNodes
 	}
 
-	excluded := (str.In(s.Name, transient.Name...) ||
-		str.In(s.IP, transient.IP...) ||
-		str.In(s.Host, transient.Host...) ||
-		str.In(s.Name, persistent.Name...) ||
-		str.In(s.IP, persistent.IP...) ||
-		str.In(s.Host, persistent.Host...))
+	excluded := (transient.HasName(s.Name) ||
+		transient.HasIP(s.IP) ||
+		transient.HasHost(s.Host) ||
+		persistent.HasName(s.Name) ||
+		persistent.HasIP(s.IP) ||
+		persistent.HasHost(s.Host))
 	if !excluded {
 		for k, v := range s.Attributes {
 			if sv, ok := transient.Attr[k]; ok && str.In(fmt.Sprint(v), sv...) {
