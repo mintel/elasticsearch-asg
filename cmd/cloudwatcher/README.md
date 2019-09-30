@@ -13,7 +13,7 @@ The metrics are both in total, and broken out by node role (master, data, etc...
 
 ## Usage
 
-```bash
+```sh
 usage: cloudwatcher [<flags>]
 
 Push Elasticsearch metrics to AWS CloudWatch, specifically to run AWS Autoscaling Groups for Elasticsearch.

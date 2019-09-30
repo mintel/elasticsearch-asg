@@ -22,7 +22,7 @@ and monthly snapshots that are kept for 3 years. Delete old snapshots.
 
 ## Usage
 
-```bash
+```sh
 usage: snapshooter --repo.name=REPO.NAME [<flags>]
 
 Create period Elasticsearch snapshots, and delete old ones with downsampling.

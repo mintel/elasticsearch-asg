@@ -6,7 +6,7 @@ Enable/disable scaling of an AWS AutoScaling Group based on Elasticsearch cluste
 
 ## Usage
 
-```bash
+```sh
 usage: throttler --group=AUTOSCALING_GROUP_NAME [<flags>]
 
 Enable or disable AWS AutoScaling Group scaling based on Elasticsearch cluster status.

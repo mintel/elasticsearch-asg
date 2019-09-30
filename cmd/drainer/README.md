@@ -2,11 +2,11 @@
 
 [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-drainer.svg)](https://hub.docker.com/r/mintel/elasticsearch-drainer)
 
-Move shards off of Elasticsearch EC2 nodes that are about to be terminated.
+Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated.
 
 ## Usage
 
-```bash
+```sh
 usage: drainer --queue=SQS_QUEUE_URL [<flags>]
 
 Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated.
