@@ -1,6 +1,7 @@
 package healthchecker
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -92,7 +93,7 @@ func (app *App) Main(g prometheus.Gatherer) {
 	defer cmd.SetGlobalLogger(logger)()
 
 	// Serve the healthchecks, Prometheus metrics, and pprof traces.
-	mux := app.flags.ConfigureMux(nil, app.health.Handler, g)
+	mux := app.flags.ConfigureMux(http.DefaultServeMux, app.health.Handler, g)
 	srv := app.flags.Server(mux)
 	if err := srv.ListenAndServe(); err != nil {
 		logger.Fatal("error serving healthchecks/metrics",
