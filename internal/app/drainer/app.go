@@ -158,9 +158,22 @@ func (app *App) Main(g prometheus.Gatherer) {
 		)
 		return e.Run(ctx)
 	})
-	spotInterruptions := app.events.On(
-		topicKey("aws.ec2", "EC2 Spot Instance Interruption Warning"),
+
+	// Batch handling of many spot interruptions together.
+	// That way we don't hit the Elasticsearch cluster settings API
+	// many times if lots of instances get interrupted.
+	spotInterruptions := batchEvents(
+		app.events.On(
+			topicKey("aws.ec2", "EC2 Spot Instance Interruption Warning"),
+		),
+		make(chan []emitter.Event, 1),
+		10*time.Millisecond,
+		20,
 	)
+
+	// We shouldn't need to batch handling of lifecycle termination actions
+	// because an AutoScaling group will only ever terminate one instance
+	// at a time.
 	lifecycleTerminateActions := app.events.On(
 		topicKey("aws.autoscaling", "EC2 Instance-terminate Lifecycle Action"),
 	)
@@ -171,15 +184,18 @@ loop:
 		case <-ctx.Done():
 			break loop
 
-		case e, ok := <-spotInterruptions:
-			app.inst.MessagesReceived.Inc()
-			app.inst.SpotInterruptions.Inc()
+		case batch, ok := <-spotInterruptions:
+			app.inst.MessagesReceived.Add(float64(len(batch)))
+			app.inst.SpotInterruptions.Add(float64(len(batch)))
 			if !ok {
 				logger.Panic("event listener closed")
 			}
-			cwe := e.Args[0].(*events.CloudWatchEvent)
+			cwes := make([]*events.CloudWatchEvent, len(batch))
+			for i, e := range batch {
+				cwes[i] = e.Args[0].(*events.CloudWatchEvent)
+			}
 			eg.Go(func() error {
-				return app.handleSpotInterruptionEvent(ctx, cwe)
+				return app.handleSpotInterruptionEvent(ctx, cwes)
 			})
 
 		case e, ok := <-lifecycleTerminateActions:
@@ -207,9 +223,13 @@ loop:
 // CloudWatch events by draining the node. It's highly unlikely that the 2 minutes
 // warning we get for spot interruptions is enough to fully drain the node, but it
 // is enough time for Elasticsearch to promote other shards to primary.
-func (app *App) handleSpotInterruptionEvent(ctx context.Context, e *events.CloudWatchEvent) error {
-	d := e.Detail.(*events.EC2SpotInterruption)
-	return app.clients.ESFacade.DrainNodes(ctx, []string{d.InstanceID})
+func (app *App) handleSpotInterruptionEvent(ctx context.Context, batch []*events.CloudWatchEvent) error {
+	ids := make([]string, len(batch))
+	for i, e := range batch {
+		d := e.Detail.(*events.EC2SpotInterruption)
+		ids[i] = d.InstanceID
+	}
+	return app.clients.ESFacade.DrainNodes(ctx, ids)
 }
 
 // handleLifecycleTerminateActionEvent handles an AutoScaling Group Termination Lifecycle
