@@ -18,6 +18,9 @@ const (
 // Flags holds command line flags for the
 // healthcheck App.
 type Flags struct {
+	// If true, check health once and exit with a status code.
+	Once bool
+
 	// Allow various checks to be disabled.
 	DisableCheckHead           bool
 	DisableCheckJoined         bool
@@ -30,6 +33,9 @@ type Flags struct {
 // NewFlags returns a new Flags.
 func NewFlags(app *kingpin.Application) *Flags {
 	var f Flags
+
+	app.Flag("once", "If true, check health once and exit with a status code.").
+		BoolVar(&f.Once)
 
 	app.Flag("no-check-head", "Disable HEAD check.").
 		BoolVar(&f.DisableCheckHead)

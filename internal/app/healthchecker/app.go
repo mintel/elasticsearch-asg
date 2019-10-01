@@ -2,6 +2,7 @@ package healthchecker
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 
@@ -91,6 +92,17 @@ func (app *App) Main(g prometheus.Gatherer) {
 	logger := app.flags.Logger()
 	defer func() { _ = logger.Sync() }()
 	defer cmd.SetGlobalLogger(logger)()
+
+	if app.flags.Once {
+		r := httptest.NewRequest("GET", app.flags.ReadyPath, nil)
+		w := httptest.NewRecorder()
+		app.health.Handler.ReadyEndpoint(w, r)
+		if w.Code == 200 {
+			os.Exit(0)
+		} else {
+			os.Exit(1)
+		}
+	}
 
 	// Serve the healthchecks, Prometheus metrics, and pprof traces.
 	mux := app.flags.ConfigureMux(http.DefaultServeMux, app.health.Handler, g)
