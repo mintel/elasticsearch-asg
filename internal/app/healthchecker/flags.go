@@ -31,13 +31,13 @@ type Flags struct {
 func NewFlags(app *kingpin.Application) *Flags {
 	var f Flags
 
-	kingpin.Flag("no-check-head", "Disable HEAD check.").
+	app.Flag("no-check-head", "Disable HEAD check.").
 		BoolVar(&f.DisableCheckHead)
 
-	kingpin.Flag("no-check-joined-cluster", "Disable joined cluster check.").
+	app.Flag("no-check-joined-cluster", "Disable joined cluster check.").
 		BoolVar(&f.DisableCheckJoined)
 
-	kingpin.Flag("no-check-rolling-upgrade", "Disable rolling upgrade check.").
+	app.Flag("no-check-rolling-upgrade", "Disable rolling upgrade check.").
 		BoolVar(&f.DisableCheckRollingUpgrade)
 
 	f.ElasticsearchFlags = cmd.NewElasticsearchFlags(app, defaultElasticsearchRetryInit, defaultElasticsearchRetryMax)
