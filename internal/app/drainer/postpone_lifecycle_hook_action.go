@@ -30,6 +30,7 @@ var (
 )
 
 func init() {
+	// TODO: move this out of a global variable.
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 10 * 10,
 		MaxCost:     10,
