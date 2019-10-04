@@ -23,13 +23,18 @@ usage: healthchecker [<flags>]
 Serve liveness and readiness checks for Elasticsearch.
 
 Flags:
-      --help                   Show context-sensitive help (also try --help-long and --help-man).
+      --help                     Show context-sensitive help (also try --help-long and --help-man).
+      --once                     If true, check health once and exit with a status code.
+      --no-check-head            Disable HEAD check.
+      --no-check-joined-cluster  Disable joined cluster check.
+      --no-check-rolling-upgrade
+                                 Disable rolling upgrade check.
   -e, --elasticsearch.url=http://127.0.0.1:9200 ...
-                               URL(s) of Elasticsearch.
-      --log.level=INFO         Set logging level.
-      --serve.port=8080        Port on which to expose health checks and Prometheus metrics.
+                                 URL(s) of Elasticsearch.
+      --log.level=INFO           Set logging level.
+      --serve.port=8080          Port on which to expose healthchecks and Prometheus metrics.
       --serve.metrics="/metrics"
-                               Path at which to serve Prometheus metrics.
-      --serve.live="/livez"    Path at which to liveness healthcheck.
-      --serve.ready="/readyz"  Path at which to serve Prometheus metrics.
+                                 Path at which to serve Prometheus metrics.
+      --serve.live="/livez"      Path at which to serve liveness healthcheck.
+      --serve.ready="/readyz"    Path at which to serve readiness healthcheck.
 ```

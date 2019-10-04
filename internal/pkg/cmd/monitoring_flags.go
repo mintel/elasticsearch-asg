@@ -49,7 +49,7 @@ func NewMonitoringFlags(app Flagger, port int, logLevel string) *MonitoringFlags
 		Default(logLevel).
 		SetValue(&f.LogLevel)
 
-	app.Flag("serve.port", "Port on which to expose health checks and Prometheus metrics.").
+	app.Flag("serve.port", "Port on which to expose healthchecks and Prometheus metrics.").
 		Default(strconv.Itoa(port)).
 		Uint16Var(&f.Port)
 
@@ -57,11 +57,11 @@ func NewMonitoringFlags(app Flagger, port int, logLevel string) *MonitoringFlags
 		Default("/metrics").
 		StringVar(&f.MetricsPath)
 
-	app.Flag("serve.live", "Path at which to liveness healthcheck.").
+	app.Flag("serve.live", "Path at which to serve liveness healthcheck.").
 		Default("/livez").
 		StringVar(&f.LivePath)
 
-	app.Flag("serve.ready", "Path at which to serve Prometheus metrics.").
+	app.Flag("serve.ready", "Path at which to serve readiness healthcheck.").
 		Default("/readyz").
 		StringVar(&f.ReadyPath)
 

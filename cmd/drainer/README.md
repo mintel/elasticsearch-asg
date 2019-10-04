@@ -21,9 +21,9 @@ Flags:
   -e, --elasticsearch.url=http://127.0.0.1:9200 ...
                                 URL(s) of Elasticsearch.
       --log.level=INFO          Set logging level.
-      --serve.port=8080         Port on which to expose health checks and Prometheus metrics.
+      --serve.port=8080         Port on which to expose healthchecks and Prometheus metrics.
       --serve.metrics="/metrics"
                                 Path at which to serve Prometheus metrics.
-      --serve.live="/livez"     Path at which to liveness healthcheck.
-      --serve.ready="/readyz"   Path at which to serve Prometheus metrics.
+      --serve.live="/livez"     Path at which to serve liveness healthcheck.
+      --serve.ready="/readyz"   Path at which to serve readiness healthcheck.
 ```
