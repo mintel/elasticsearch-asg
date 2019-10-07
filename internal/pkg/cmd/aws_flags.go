@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 )
 
@@ -53,6 +54,14 @@ func (f *AWSFlags) AWSConfig(opts ...external.Config) aws.Config {
 	cfg, err := external.LoadDefaultAWSConfig(opts...)
 	if err != nil {
 		panic("unable to load AWS SDK default config, " + err.Error())
+	}
+
+	if cfg.Region == "" {
+		// Try setting region from EC2 metadata.
+		metaClient := ec2metadata.New(cfg)
+		if region, err := metaClient.Region(); err == nil {
+			cfg.Region = region
+		}
 	}
 
 	cfg.Retryer = aws.DefaultRetryer{
