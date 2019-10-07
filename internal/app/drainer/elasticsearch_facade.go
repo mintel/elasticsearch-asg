@@ -27,7 +27,7 @@ type ElasticsearchFacade struct {
 	settingsMu sync.RWMutex // Protect access to the Elasticsearch cluster settings API.
 }
 
-var _ ElasticsearchFacadeIface = (*ElasticsearchFacade)(nil) // Assert implements interface.
+var _ ElasticsearchFacadeIface = (*ElasticsearchFacade)(nil) // Assert ElasticsearchFacade implements the ElasticsearchFacadeIface interface.
 
 // NewElasticsearchFacade returns a new ElasticsearchFacade.
 func NewElasticsearchFacade(c *elastic.Client) *ElasticsearchFacade {

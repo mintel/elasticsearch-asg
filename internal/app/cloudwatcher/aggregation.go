@@ -32,7 +32,7 @@ type StatsData struct {
 	data []float64
 }
 
-var _ AggregationData = (*StatsData)(nil)
+var _ AggregationData = (*StatsData)(nil) // Assert StatsData implements the AggregationData interface.
 
 func (d *StatsData) AddSample(ns *NodeStats) {
 	if f := d.Selector(ns); f != nil {
@@ -64,7 +64,7 @@ type SumData struct {
 	data []float64
 }
 
-var _ AggregationData = (*SumData)(nil)
+var _ AggregationData = (*SumData)(nil) // Assert SumData implements the AggregationData interface.
 
 func (d *SumData) AddSample(ns *NodeStats) {
 	if f := d.Selector(ns); f != nil {
@@ -95,7 +95,7 @@ type UtilizationData struct {
 	denom []float64
 }
 
-var _ AggregationData = (*UtilizationData)(nil)
+var _ AggregationData = (*UtilizationData)(nil) // Assert UtilizationData implements the AggregationData interface.
 
 func (d *UtilizationData) AddSample(ns *NodeStats) {
 	num, denom := d.Numerator(ns), d.Denominator(ns)
