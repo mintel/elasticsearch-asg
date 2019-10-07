@@ -16,7 +16,7 @@ type AggregationData interface {
 
 	// Datum returns the aggregated data as a CloudWatch
 	// Metrics data point.
-	Datum() cloudwatch.MetricDatum
+	Datum() *cloudwatch.MetricDatum
 }
 
 // SelectorFn returns some aspect of a NodeStats to
@@ -40,7 +40,10 @@ func (d *StatsData) AddSample(ns *NodeStats) {
 	}
 }
 
-func (d *StatsData) Datum() cloudwatch.MetricDatum {
+func (d *StatsData) Datum() *cloudwatch.MetricDatum {
+	if len(d.data) == 0 {
+		return nil
+	}
 	m := d.Template
 	if len(d.data) != 0 {
 		m.StatisticValues = &cloudwatch.StatisticSet{
@@ -50,7 +53,7 @@ func (d *StatsData) Datum() cloudwatch.MetricDatum {
 			Sum:         aws.Float64(floats.Sum(d.data)),
 		}
 	}
-	return m
+	return &m
 }
 
 // SumData aggregates a simple sum of samples.
@@ -69,12 +72,15 @@ func (d *SumData) AddSample(ns *NodeStats) {
 	}
 }
 
-func (d *SumData) Datum() cloudwatch.MetricDatum {
+func (d *SumData) Datum() *cloudwatch.MetricDatum {
+	if len(d.data) == 0 {
+		return nil
+	}
 	m := d.Template
 	if len(d.data) != 0 {
 		m.Value = aws.Float64(floats.Sum(d.data))
 	}
-	return m
+	return &m
 }
 
 // UtilizationData aggregates a percentage representing the
@@ -99,11 +105,14 @@ func (d *UtilizationData) AddSample(ns *NodeStats) {
 	}
 }
 
-func (d *UtilizationData) Datum() cloudwatch.MetricDatum {
+func (d *UtilizationData) Datum() *cloudwatch.MetricDatum {
+	if len(d.num) == 0 {
+		return nil
+	}
 	m := d.Template
 	num, denom := floats.Sum(d.num), floats.Sum(d.denom)
 	if denom != 0 {
 		m.Value = aws.Float64((num / denom) * 100) // CloudWatch percents are int 0-100.
 	}
-	return m
+	return &m
 }

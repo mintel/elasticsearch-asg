@@ -30,8 +30,8 @@ const (
 	Usage = "Push Elasticsearch metrics to AWS CloudWatch, specifically to run AWS Autoscaling Groups for Elasticsearch."
 
 	// Batch size when pushing metrics to CloudWatch.
-	// This is probably small enough.
-	batchSize = 30
+	// This is the max allowed by the AWS API.
+	batchSize = 20
 )
 
 // App holds application state.
@@ -169,7 +169,8 @@ func (app *App) Main(g prometheus.Gatherer) {
 					Value: aws.String(r),
 				},
 			}
-			metricData = append(metricData, s.Aggregate(dimensions)...)
+			data := s.Aggregate(dimensions)
+			metricData = append(metricData, data...)
 		}
 
 		logger.Info("pushing metrics to CloudWatch", zap.Int("count", len(metricData)))

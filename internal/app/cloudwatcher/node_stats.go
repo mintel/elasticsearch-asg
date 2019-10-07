@@ -448,15 +448,11 @@ func (s NodeStatsSlice) Aggregate(dimensions []cloudwatch.Dimension) []cloudwatc
 		}
 	}
 
-	out := make([]cloudwatch.MetricDatum, len(aggs))
-	i := 0
+	out := make([]cloudwatch.MetricDatum, 0, len(aggs))
 	for _, a := range aggs {
-		m := a.Datum()
-		if m.Value != nil || m.StatisticValues != nil || m.Values != nil {
-			out[i] = m
-			i++
+		if m := a.Datum(); m != nil {
+			out = append(out, *m)
 		}
 	}
-
 	return out
 }

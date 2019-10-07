@@ -73,7 +73,7 @@ func Test_statsData_Datum(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		want   cloudwatch.MetricDatum
+		want   *cloudwatch.MetricDatum
 	}{
 		{
 			name: "basic",
@@ -83,7 +83,7 @@ func Test_statsData_Datum(t *testing.T) {
 				},
 				data: []float64{1, 2, 3},
 			},
-			want: cloudwatch.MetricDatum{
+			want: &cloudwatch.MetricDatum{
 				MetricName: aws.String("Foobar"),
 				StatisticValues: &cloudwatch.StatisticSet{
 					Maximum:     aws.Float64(3),
@@ -92,6 +92,16 @@ func Test_statsData_Datum(t *testing.T) {
 					Sum:         aws.Float64(6),
 				},
 			},
+		},
+		{
+			name: "nil",
+			fields: fields{
+				Template: cloudwatch.MetricDatum{
+					MetricName: aws.String("Foobar"),
+				},
+				data: []float64{},
+			},
+			want: nil,
 		},
 	}
 	for _, tt := range tests {
@@ -170,7 +180,7 @@ func Test_sumData_Datum(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		want   cloudwatch.MetricDatum
+		want   *cloudwatch.MetricDatum
 	}{
 		{
 			name: "basic",
@@ -180,10 +190,20 @@ func Test_sumData_Datum(t *testing.T) {
 				},
 				data: []float64{1, 2, 3},
 			},
-			want: cloudwatch.MetricDatum{
+			want: &cloudwatch.MetricDatum{
 				MetricName: aws.String("Foobar"),
 				Value:      aws.Float64(6),
 			},
+		},
+		{
+			name: "nil",
+			fields: fields{
+				Template: cloudwatch.MetricDatum{
+					MetricName: aws.String("Foobar"),
+				},
+				data: []float64{},
+			},
+			want: nil,
 		},
 	}
 	for _, tt := range tests {
@@ -305,7 +325,7 @@ func Test_utilizationData_Datum(t *testing.T) {
 	tests := []struct {
 		name   string
 		fields fields
-		want   cloudwatch.MetricDatum
+		want   *cloudwatch.MetricDatum
 	}{
 		{
 			name: "basic",
@@ -316,10 +336,21 @@ func Test_utilizationData_Datum(t *testing.T) {
 				num:   []float64{1, 2, 3},
 				denom: []float64{3, 3, 3},
 			},
-			want: cloudwatch.MetricDatum{
+			want: &cloudwatch.MetricDatum{
 				MetricName: aws.String("Foobar"),
 				Value:      aws.Float64((6.0 / 9.0) * 100),
 			},
+		},
+		{
+			name: "nil",
+			fields: fields{
+				Template: cloudwatch.MetricDatum{
+					MetricName: aws.String("Foobar"),
+				},
+				num:   []float64{},
+				denom: []float64{},
+			},
+			want: nil,
 		},
 	}
 	for _, tt := range tests {
@@ -330,10 +361,14 @@ func Test_utilizationData_Datum(t *testing.T) {
 				denom:    tt.fields.denom,
 			}
 			got := d.Datum()
-			assert.InDelta(t, *tt.want.Value, *got.Value, delta)
-			tt.want.Value = nil
-			got.Value = nil
-			assert.Equal(t, tt.want, got)
+			if tt.want == nil {
+				assert.Nil(t, got)
+			} else {
+				assert.InDelta(t, *tt.want.Value, *got.Value, delta)
+				tt.want.Value = nil
+				got.Value = nil
+				assert.Equal(t, tt.want, got)
+			}
 		})
 	}
 }
