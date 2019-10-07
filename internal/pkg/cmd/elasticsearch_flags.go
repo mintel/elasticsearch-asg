@@ -40,7 +40,7 @@ func NewElasticsearchFlags(app Flagger, retryInit, retryMax time.Duration) *Elas
 	app.Flag("elasticsearch.retry.max", "Max duration of Elasticsearch exponential backoff retries.").
 		Hidden().
 		Default(retryMax.String()).
-		DurationVar(&f.Retry.Init)
+		DurationVar(&f.Retry.Max)
 
 	return &f
 }
