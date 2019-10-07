@@ -5,8 +5,6 @@ import (
 	"time"
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
-
-	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 // ElasticsearchFlags represents a base set of flags for
@@ -55,6 +53,14 @@ func (f *ElasticsearchFlags) NewElasticsearchClient(options ...elastic.ClientOpt
 	for i, u := range f.URLs {
 		urls[i] = u.String()
 	}
-	options = append(options, elastic.SetURL(urls...))
-	return es.DialRetry(f.Retry.Init, f.Retry.Max, options...)
+	backoff := elastic.NewExponentialBackoff(f.Retry.Init, f.Retry.Max)
+	retrier := elastic.NewBackoffRetrier(backoff)
+	elastic.SetRetrier(retrier)
+	options = append(
+		options,
+		elastic.SetURL(urls...),
+		elastic.SetHealthcheckTimeout(f.Retry.Max),
+		elastic.SetHealthcheckTimeoutStartup(f.Retry.Max),
+	)
+	return elastic.NewClient(options...)
 }
