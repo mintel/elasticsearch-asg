@@ -1,17 +1,11 @@
 sudo: required
 language: go
 go:
-  - "1.11.x"
-  - "1.12.x"
   - "1.13.x"
 
 matrix:
   allow_failures:
   - go: tip
-
-env:
-  - GO111MODULE=on
-  - GO111MODULE=off
 
 cache:
   directories:
@@ -19,7 +13,7 @@ cache:
     - $HOME/gopath/pkg/mod
 
 install:
-  - GOPROXY=https://proxy.golang.org go get -t -v ./...
+  - go get -t -v ./...
 
 before_script:
   # Generate mocks of latest AWS SDK APIs.
