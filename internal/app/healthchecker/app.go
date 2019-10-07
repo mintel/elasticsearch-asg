@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cenkalti/backoff"                    // Backoff on connection error.
 	elastic "github.com/olivere/elastic/v7"          // Elasticsearch client.
 	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
 	"go.uber.org/zap"                                // Logging.
@@ -30,7 +29,8 @@ type App struct {
 
 	// API clients.
 	clients struct {
-		HTTP *http.Client
+		ElasticsearchHTTP *http.Client
+		Elasticsearch     *elastic.Client
 	}
 }
 
@@ -42,16 +42,29 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 		health:      NewHealthchecks(r, namespace),
 	}
 	app.flags = NewFlags(app.Application)
-	// Add action to instrument HTTP client.
+
+	// Add post-flag-parsing actions.
+	// These should only return an error if that error
+	// is related to user input in some way, since kingpin prints the
+	// error in a way that suggests a user problem. For example, an error
+	// connecting to Elasticsearch might look like:
+	//
+	//   cloudwatcher: error: health check timeout: no Elasticsearch node available, try --help
+
+	// Instrument a HTTP client that will be used to connect
+	// to Elasticsearch. Don't create the Elasticsearch client
+	// itself since the client makes an immeditate call to
+	// Elasticsearch to check the connection.
 	app.Action(func(*kingpin.ParseContext) error {
 		constLabels := map[string]string{"recipient": "elasticsearch"}
 		c, err := metrics.InstrumentHTTP(nil, r, namespace, constLabels)
 		if err != nil {
-			return err
+			panic("error instrumenting HTTP client: " + err.Error())
 		}
-		app.clients.HTTP = c
+		app.clients.ElasticsearchHTTP = c
 		return nil
 	})
+
 	return app, nil
 }
 
@@ -62,43 +75,33 @@ func (app *App) Main(g prometheus.Gatherer) {
 	defer func() { _ = logger.Sync() }()
 	defer cmd.SetGlobalLogger(logger)()
 
-	opts := app.flags.ElasticsearchConfig(
-		elastic.SetHttpClient(app.clients.HTTP),
-	)
-	var c *elastic.Client
-	var err error
-	err = backoff.Retry(
-		func() error {
-			logger.Debug("attempting connection to Elasticsearch")
-			c, err = elastic.NewClient(opts...)
-			if err != nil && !elastic.IsConnErr(err) {
-				err = backoff.Permanent(err)
-			}
-			return err
-		},
-		backoff.NewExponentialBackOff(),
+	// Set up Elasticsearch client.
+	c, err := app.flags.NewElasticsearchClient(
+		elastic.SetHttpClient(app.clients.ElasticsearchHTTP),
 	)
 	if err != nil {
 		logger.Fatal("error connecting to Elasticsearch", zap.Error(err))
 	}
+	defer c.Stop()
+	app.clients.Elasticsearch = c
 	app.health.ElasticSessionCreated = true
 
 	if !app.flags.DisableCheckHead {
 		app.health.Handler.AddLivenessCheck(
 			"elasticsearch-HEAD",
-			CheckLiveHEAD(c),
+			CheckLiveHEAD(app.clients.Elasticsearch),
 		)
 	}
 	if !app.flags.DisableCheckJoined {
 		app.health.Handler.AddReadinessCheck(
 			"joined-cluster",
-			CheckReadyJoinedCluster(c),
+			CheckReadyJoinedCluster(app.clients.Elasticsearch),
 		)
 	}
 	if !app.flags.DisableCheckRollingUpgrade {
 		app.health.Handler.AddReadinessCheck(
 			"rolling-upgrade",
-			CheckReadyRollingUpgrade(c),
+			CheckReadyRollingUpgrade(app.clients.Elasticsearch),
 		)
 	}
 

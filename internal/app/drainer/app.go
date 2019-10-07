@@ -47,8 +47,9 @@ type App struct {
 
 	// API clients.
 	clients struct {
-		Elasticsearch *elastic.Client
-		ESFacade      *ElasticsearchFacade
+		ElasticsearchHTTP   *http.Client
+		Elasticsearch       *elastic.Client
+		ElasticsearchFacade *ElasticsearchFacade
 
 		SQS         sqsiface.ClientAPI
 		AutoScaling autoscalingiface.ClientAPI
@@ -75,24 +76,25 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 		return nil, err
 	}
 
-	// Add action to set up Elasticsearch client after
-	// flags are parsed.
+	// Add post-flag-parsing actions.
+	// These should only return an error if that error
+	// is related to user input in some way, since kingpin prints the
+	// error in a way that suggests a user problem. For example, an error
+	// connecting to Elasticsearch might look like:
+	//
+	//   cloudwatcher: error: health check timeout: no Elasticsearch node available, try --help
+
+	// Instrument a HTTP client that will be used to connect
+	// to Elasticsearch. Don't create the Elasticsearch client
+	// itself since the client makes an immeditate call to
+	// Elasticsearch to check the connection.
 	app.Action(func(*kingpin.ParseContext) error {
 		constLabels := map[string]string{"recipient": "elasticsearch"}
-		httpClient, err := metrics.InstrumentHTTP(nil, r, namespace, constLabels)
+		c, err := metrics.InstrumentHTTP(nil, r, namespace, constLabels)
 		if err != nil {
-			return err
+			panic("error instrumenting HTTP client: " + err.Error())
 		}
-		opts := app.flags.ElasticsearchConfig(
-			elastic.SetHttpClient(httpClient),
-		)
-		c, err := elastic.NewClient(opts...)
-		if err != nil {
-			return err
-		}
-		app.clients.Elasticsearch = c
-		app.clients.ESFacade = NewElasticsearchFacade(c)
-		app.health.ElasticSessionCreated = true
+		app.clients.ElasticsearchHTTP = c
 		return nil
 	})
 
@@ -102,7 +104,7 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 		cfg := app.flags.AWSConfig()
 		err := metrics.InstrumentAWS(&cfg.Handlers, r, namespace, nil)
 		if err != nil {
-			return err
+			panic("error instrumenting AWS config: " + err.Error())
 		}
 		app.clients.SQS = sqs.New(cfg)
 		app.clients.AutoScaling = autoscaling.New(cfg)
@@ -129,6 +131,18 @@ func (app *App) Main(g prometheus.Gatherer) {
 				zap.Error(err))
 		}
 	}()
+
+	// Set up Elasticsearch client.
+	c, err := app.flags.NewElasticsearchClient(
+		elastic.SetHttpClient(app.clients.ElasticsearchHTTP),
+	)
+	if err != nil {
+		logger.Fatal("error connecting to Elasticsearch", zap.Error(err))
+	}
+	defer c.Stop()
+	app.clients.Elasticsearch = c
+	app.clients.ElasticsearchFacade = NewElasticsearchFacade(c)
+	app.health.ElasticSessionCreated = true
 
 	eg, ctx := errgroup.WithContext(context.Background())
 
@@ -230,7 +244,7 @@ func (app *App) handleSpotInterruptionEvent(ctx context.Context, batch []*events
 		d := e.Detail.(*events.EC2SpotInterruption)
 		ids[i] = d.InstanceID
 	}
-	return app.clients.ESFacade.DrainNodes(ctx, ids)
+	return app.clients.ElasticsearchFacade.DrainNodes(ctx, ids)
 }
 
 // handleLifecycleTerminateActionEvent handles an AutoScaling Group Termination Lifecycle
@@ -244,7 +258,7 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 		return err
 	}
 
-	err = app.clients.ESFacade.DrainNodes(ctx, []string{a.InstanceID})
+	err = app.clients.ElasticsearchFacade.DrainNodes(ctx, []string{a.InstanceID})
 	if err != nil {
 		return err
 	}
@@ -317,7 +331,7 @@ func (app *App) updateClusterState(ctx context.Context) error {
 	app.clusterStateMu.Lock()
 	defer app.clusterStateMu.Unlock()
 
-	newState, err := app.clients.ESFacade.GetState(ctx)
+	newState, err := app.clients.ElasticsearchFacade.GetState(ctx)
 	if err != nil {
 		return errors.Wrap(err, "error getting cluster state")
 	}
@@ -334,7 +348,7 @@ func (app *App) updateClusterState(ctx context.Context) error {
 			removed = append(removed, n)
 		}
 	}
-	if err := app.clients.ESFacade.UndrainNodes(ctx, toUndrain); err != nil {
+	if err := app.clients.ElasticsearchFacade.UndrainNodes(ctx, toUndrain); err != nil {
 		return errors.Wrap(err, "error while undraining nodes")
 	}
 	removed = uniqStrings(removed...)

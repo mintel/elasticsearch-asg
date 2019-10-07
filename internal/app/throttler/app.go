@@ -32,8 +32,10 @@ type App struct {
 
 	// API clients.
 	clients struct {
-		Elasticsearch *elastic.Client
-		AutoScaling   autoscalingiface.ClientAPI
+		ElasticsearchHTTP *http.Client
+		Elasticsearch     *elastic.Client
+
+		AutoScaling autoscalingiface.ClientAPI
 	}
 }
 
@@ -53,24 +55,25 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 	}
 	app.flags = NewFlags(app.Application)
 
-	// Add action to set up Elasticsearch client after
-	// flags are parsed.
+	// Add post-flag-parsing actions.
+	// These should only return an error if that error
+	// is related to user input in some way, since kingpin prints the
+	// error in a way that suggests a user problem. For example, an error
+	// connecting to Elasticsearch might look like:
+	//
+	//   cloudwatcher: error: health check timeout: no Elasticsearch node available, try --help
+
+	// Instrument a HTTP client that will be used to connect
+	// to Elasticsearch. Don't create the Elasticsearch client
+	// itself since the client makes an immeditate call to
+	// Elasticsearch to check the connection.
 	app.Action(func(*kingpin.ParseContext) error {
 		constLabels := map[string]string{"recipient": "elasticsearch"}
-		httpClient, err := metrics.InstrumentHTTP(nil, r, namespace, constLabels)
+		c, err := metrics.InstrumentHTTP(nil, r, namespace, constLabels)
 		if err != nil {
-			return err
+			panic("error instrumenting HTTP client: " + err.Error())
 		}
-		svc, err := elastic.NewClient(
-			app.flags.ElasticsearchConfig(
-				elastic.SetHttpClient(httpClient),
-			)...,
-		)
-		if err != nil {
-			return err
-		}
-		app.clients.Elasticsearch = svc
-		app.health.ElasticSessionCreated = true
+		app.clients.ElasticsearchHTTP = c
 		return nil
 	})
 
@@ -80,7 +83,7 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 		cfg := app.flags.AWSConfig()
 		err := metrics.InstrumentAWS(&cfg.Handlers, r, namespace, nil)
 		if err != nil {
-			return err
+			panic("error instrumenting AWS config: " + err.Error())
 		}
 		app.clients.AutoScaling = autoscaling.New(cfg)
 		app.health.AWSSessionCreated = true
@@ -105,6 +108,17 @@ func (app *App) Main(g prometheus.Gatherer) {
 			logger.Fatal("error serving healthchecks/metrics", zap.Error(err))
 		}
 	}()
+
+	// Set up Elasticsearch client.
+	c, err := app.flags.NewElasticsearchClient(
+		elastic.SetHttpClient(app.clients.ElasticsearchHTTP),
+	)
+	if err != nil {
+		logger.Fatal("error connecting to Elasticsearch", zap.Error(err))
+	}
+	defer c.Stop()
+	app.clients.Elasticsearch = c
+	app.health.ElasticSessionCreated = true
 
 	clusterState := NewClusterStateGetter(app.clients.Elasticsearch)
 	scaling := make(map[string]*AutoScalingGroupEnabler, len(app.flags.AutoScalingGroupNames))

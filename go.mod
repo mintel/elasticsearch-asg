@@ -5,7 +5,6 @@ go 1.12
 require (
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/aws/aws-sdk-go-v2 v0.12.0
-	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/dgraph-io/ristretto v0.0.0-20190930161113-c0fc2b91c465
 	github.com/google/go-cmp v0.3.1 // indirect
 	github.com/kr/pretty v0.1.0 // indirect

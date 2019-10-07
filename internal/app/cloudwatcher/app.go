@@ -44,7 +44,8 @@ type App struct {
 
 	// API clients.
 	clients struct {
-		Elasticsearch *elastic.Client
+		ElasticsearchHTTP *http.Client
+		Elasticsearch     *elastic.Client
 
 		CloudWatch cloudwatchiface.ClientAPI
 		EC2        ec2iface.ClientAPI
@@ -80,33 +81,34 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 		return nil, err
 	}
 
-	// Add action to set up Elasticsearch client after
-	// flags are parsed.
+	// Add post-flag-parsing actions.
+	// These should only return an error if that error
+	// is related to user input in some way, since kingpin prints the
+	// error in a way that suggests a user problem. For example, an error
+	// connecting to Elasticsearch might look like:
+	//
+	//   cloudwatcher: error: health check timeout: no Elasticsearch node available, try --help
+
+	// Instrument a HTTP client that will be used to connect
+	// to Elasticsearch. Don't create the Elasticsearch client
+	// itself since the client makes an immeditate call to
+	// Elasticsearch to check the connection.
 	app.Action(func(*kingpin.ParseContext) error {
 		constLabels := map[string]string{"recipient": "elasticsearch"}
-		httpClient, err := metrics.InstrumentHTTP(nil, r, namespace, constLabels)
+		c, err := metrics.InstrumentHTTP(nil, r, namespace, constLabels)
 		if err != nil {
-			return err
+			panic("error instrumenting HTTP client: " + err.Error())
 		}
-		opts := app.flags.ElasticsearchConfig(
-			elastic.SetHttpClient(httpClient),
-		)
-		c, err := elastic.NewClient(opts...)
-		if err != nil {
-			return err
-		}
-		app.clients.Elasticsearch = c
-		app.health.ElasticSessionCreated = true
+		app.clients.ElasticsearchHTTP = c
 		return nil
 	})
 
-	// Add action to set up AWS client(s) after
-	// flags are parsed.
+	// Set up AWS client(s).
 	app.Action(func(*kingpin.ParseContext) error {
 		cfg := app.flags.AWSConfig()
 		err := metrics.InstrumentAWS(&cfg.Handlers, r, namespace, nil)
 		if err != nil {
-			return err
+			panic("error instrumenting AWS config: " + err.Error())
 		}
 		app.clients.CloudWatch = cloudwatch.New(cfg)
 		app.clients.EC2 = ec2.New(cfg)
@@ -123,6 +125,17 @@ func (app *App) Main(g prometheus.Gatherer) {
 	logger := app.flags.Logger()
 	defer func() { _ = logger.Sync() }()
 	defer cmd.SetGlobalLogger(logger)()
+
+	// Set up Elasticsearch client.
+	c, err := app.flags.NewElasticsearchClient(
+		elastic.SetHttpClient(app.clients.ElasticsearchHTTP),
+	)
+	if err != nil {
+		logger.Fatal("error connecting to Elasticsearch", zap.Error(err))
+	}
+	defer c.Stop()
+	app.clients.Elasticsearch = c
+	app.health.ElasticSessionCreated = true
 
 	// Serve the healthchecks, Prometheus metrics, and pprof traces.
 	go func() {

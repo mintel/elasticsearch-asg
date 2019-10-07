@@ -5,6 +5,8 @@ import (
 	"time"
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+
+	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
 )
 
 // ElasticsearchFlags represents a base set of flags for
@@ -45,18 +47,15 @@ func NewElasticsearchFlags(app Flagger, retryInit, retryMax time.Duration) *Elas
 	return &f
 }
 
-func (f *ElasticsearchFlags) ElasticsearchConfig(opts ...elastic.ClientOptionFunc) []elastic.ClientOptionFunc {
+// NewElasticsearchClient returns a new Elasticsearch client
+// configured with the URL and retry flag values, plus any other options
+// passed in.
+func (f *ElasticsearchFlags) NewElasticsearchClient(options ...elastic.ClientOptionFunc) (*elastic.Client, error) {
 	urls := make([]string, len(f.URLs))
 	for i, u := range f.URLs {
 		urls[i] = u.String()
 	}
-	opts = append(opts, elastic.SetURL(urls...))
+	options = append(options, elastic.SetURL(urls...))
 
-	if f.Retry.Max > 0 {
-		backoff := elastic.NewExponentialBackoff(f.Retry.Init, f.Retry.Max)
-		retrier := elastic.NewBackoffRetrier(backoff)
-		opts = append(opts, elastic.SetRetrier(retrier))
-	}
-
-	return opts
+	return es.DialRetry(f.Retry.Init, f.Retry.Max, options...)
 }
