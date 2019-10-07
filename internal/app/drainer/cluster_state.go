@@ -59,6 +59,17 @@ func (s *ClusterState) HasNode(name string) bool {
 
 // DiffNodes returns the difference between the nodes of two cluster states.
 func (s *ClusterState) DiffNodes(o *ClusterState) (add, remove []string) {
+	if s == nil && o == nil {
+		return nil, nil
+	}
+	if s == nil {
+		add = append(add, o.Nodes...)
+		return
+	}
+	if o == nil {
+		remove = append(remove, s.Nodes...)
+		return
+	}
 	if !(sort.StringsAreSorted(s.Nodes) && sort.StringsAreSorted(o.Nodes)) {
 		zap.L().Panic("node slices must be sorted")
 	}
@@ -87,7 +98,22 @@ func (s *ClusterState) DiffNodes(o *ClusterState) (add, remove []string) {
 
 // DiffNodes returns the difference between the shards of two cluster states.
 func (s *ClusterState) DiffShards(o *ClusterState) map[string]int {
-	out := make(map[string]int, len(s.Shards))
+	if s == nil && o == nil {
+		return nil
+	}
+	out := make(map[string]int)
+	if s == nil {
+		for n, c := range o.Shards {
+			out[n] = c
+		}
+		return out
+	}
+	if o == nil {
+		for n, c := range s.Shards {
+			out[n] = -c
+		}
+		return out
+	}
 	for n, c := range s.Shards {
 		if oc, ok := o.Shards[n]; ok {
 			out[n] = oc - c

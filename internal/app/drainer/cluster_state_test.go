@@ -52,8 +52,8 @@ func TestNewClusterState(t *testing.T) {
 
 func TestClusterState_DiffNodes(t *testing.T) {
 	type args struct {
-		OldNodes []string
-		NewNodes []string
+		Old *ClusterState
+		New *ClusterState
 	}
 	tests := []struct {
 		name       string
@@ -64,8 +64,12 @@ func TestClusterState_DiffNodes(t *testing.T) {
 		{
 			name: "all-add",
 			args: args{
-				OldNodes: []string{"a"},
-				NewNodes: []string{"a", "b", "c"},
+				Old: &ClusterState{
+					Nodes: []string{"a"},
+				},
+				New: &ClusterState{
+					Nodes: []string{"a", "b", "c"},
+				},
 			},
 			wantAdd:    []string{"b", "c"},
 			wantRemove: []string{},
@@ -73,8 +77,12 @@ func TestClusterState_DiffNodes(t *testing.T) {
 		{
 			name: "all-remove",
 			args: args{
-				OldNodes: []string{"a", "b", "c", "d"},
-				NewNodes: []string{"a", "d"},
+				Old: &ClusterState{
+					Nodes: []string{"a", "b", "c", "d"},
+				},
+				New: &ClusterState{
+					Nodes: []string{"a", "d"},
+				},
 			},
 			wantAdd:    []string{},
 			wantRemove: []string{"b", "c"},
@@ -82,8 +90,12 @@ func TestClusterState_DiffNodes(t *testing.T) {
 		{
 			name: "same",
 			args: args{
-				OldNodes: []string{"a", "b", "c"},
-				NewNodes: []string{"a", "b", "c"},
+				Old: &ClusterState{
+					Nodes: []string{"a", "b", "c"},
+				},
+				New: &ClusterState{
+					Nodes: []string{"a", "b", "c"},
+				},
 			},
 			wantAdd:    []string{},
 			wantRemove: []string{},
@@ -91,24 +103,44 @@ func TestClusterState_DiffNodes(t *testing.T) {
 		{
 			name: "diff",
 			args: args{
-				OldNodes: []string{"a", "b", "c"},
-				NewNodes: []string{"a", "b", "d"},
+				Old: &ClusterState{
+					Nodes: []string{"a", "b", "c"},
+				},
+				New: &ClusterState{
+					Nodes: []string{"a", "b", "d"},
+				},
 			},
 			wantAdd:    []string{"d"},
 			wantRemove: []string{"c"},
 		},
+		{
+			name: "old-nil",
+			args: args{
+				Old: nil,
+				New: &ClusterState{
+					Nodes: []string{"a", "b", "d"},
+				},
+			},
+			wantAdd:    []string{"a", "b", "d"},
+			wantRemove: []string{},
+		},
+		{
+			name: "new-nil",
+			args: args{
+				Old: &ClusterState{
+					Nodes: []string{"a", "b", "c"},
+				},
+				New: nil,
+			},
+			wantAdd:    []string{},
+			wantRemove: []string{"a", "b", "c"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.True(t, sort.StringsAreSorted(tt.args.OldNodes))
-			require.True(t, sort.StringsAreSorted(tt.args.NewNodes))
-			s := &ClusterState{
-				Nodes: tt.args.OldNodes,
-			}
-			o := &ClusterState{
-				Nodes: tt.args.NewNodes,
-			}
-			gotAdd, gotRemove := s.DiffNodes(o)
+			require.True(t, tt.args.Old == nil || sort.StringsAreSorted(tt.args.Old.Nodes))
+			require.True(t, tt.args.New == nil || sort.StringsAreSorted(tt.args.New.Nodes))
+			gotAdd, gotRemove := tt.args.Old.DiffNodes(tt.args.New)
 			assert.ElementsMatch(t, tt.wantAdd, gotAdd)
 			assert.ElementsMatch(t, tt.wantRemove, gotRemove)
 		})
@@ -121,35 +153,41 @@ func TestClusterState_DiffNodes(t *testing.T) {
 		{
 			name: "panic-old",
 			args: args{
-				OldNodes: []string{"b", "a"},
-				NewNodes: []string{"a", "b"},
+				Old: &ClusterState{
+					Nodes: []string{"b", "a"},
+				},
+				New: &ClusterState{
+					Nodes: []string{"a", "b"},
+				},
 			},
 		},
 		{
 			name: "panic-new",
 			args: args{
-				OldNodes: []string{"a", "b"},
-				NewNodes: []string{"b", "a"},
+				Old: &ClusterState{
+					Nodes: []string{"a", "b"},
+				},
+				New: &ClusterState{
+					Nodes: []string{"b", "a"},
+				},
 			},
 		},
 		{
 			name: "panic-both",
 			args: args{
-				OldNodes: []string{"b", "a"},
-				NewNodes: []string{"b", "a"},
+				Old: &ClusterState{
+					Nodes: []string{"b", "a"},
+				},
+				New: &ClusterState{
+					Nodes: []string{"b", "a"},
+				},
 			},
 		},
 	}
 	for _, tt := range panicTests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Panics(t, func() {
-				s := &ClusterState{
-					Nodes: tt.args.OldNodes,
-				}
-				o := &ClusterState{
-					Nodes: tt.args.NewNodes,
-				}
-				s.DiffNodes(o)
+				tt.args.Old.DiffNodes(tt.args.New)
 			})
 		})
 	}
@@ -157,8 +195,8 @@ func TestClusterState_DiffNodes(t *testing.T) {
 
 func TestClusterState_DiffShards(t *testing.T) {
 	type args struct {
-		OldShards map[string]int
-		NewShards map[string]int
+		Old *ClusterState
+		New *ClusterState
 	}
 	tests := []struct {
 		name string
@@ -168,45 +206,75 @@ func TestClusterState_DiffShards(t *testing.T) {
 		{
 			name: "add",
 			args: args{
-				OldShards: map[string]int{"a": 0, "b": 1},
-				NewShards: map[string]int{"a": 1, "b": 2},
+				Old: &ClusterState{
+					Shards: map[string]int{"a": 0, "b": 1},
+				},
+				New: &ClusterState{
+					Shards: map[string]int{"a": 1, "b": 2},
+				},
 			},
 			want: map[string]int{"a": 1, "b": 1},
 		},
 		{
 			name: "remove",
 			args: args{
-				OldShards: map[string]int{"a": 1, "b": 2},
-				NewShards: map[string]int{"a": 0, "b": 0},
+				Old: &ClusterState{
+					Shards: map[string]int{"a": 1, "b": 2},
+				},
+				New: &ClusterState{
+					Shards: map[string]int{"a": 0, "b": 0},
+				},
 			},
 			want: map[string]int{"a": -1, "b": -2},
 		},
 		{
 			name: "both",
 			args: args{
-				OldShards: map[string]int{"a": 1, "b": 4},
-				NewShards: map[string]int{"a": 2, "b": 3},
+				Old: &ClusterState{
+					Shards: map[string]int{"a": 1, "b": 4},
+				},
+				New: &ClusterState{
+					Shards: map[string]int{"a": 2, "b": 3},
+				},
 			},
 			want: map[string]int{"a": 1, "b": -1},
 		},
 		{
 			name: "same",
 			args: args{
-				OldShards: map[string]int{"a": 1, "b": 2},
-				NewShards: map[string]int{"a": 1, "b": 2},
+				Old: &ClusterState{
+					Shards: map[string]int{"a": 1, "b": 2},
+				},
+				New: &ClusterState{
+					Shards: map[string]int{"a": 1, "b": 2},
+				},
 			},
 			want: map[string]int{"a": 0, "b": 0},
+		},
+		{
+			name: "nil-old",
+			args: args{
+				Old: nil,
+				New: &ClusterState{
+					Shards: map[string]int{"a": 1, "b": 2},
+				},
+			},
+			want: map[string]int{"a": 1, "b": 2},
+		},
+		{
+			name: "nil-new",
+			args: args{
+				Old: &ClusterState{
+					Shards: map[string]int{"a": 1, "b": 2},
+				},
+				New: nil,
+			},
+			want: map[string]int{"a": -1, "b": -2},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &ClusterState{
-				Shards: tt.args.OldShards,
-			}
-			o := &ClusterState{
-				Shards: tt.args.NewShards,
-			}
-			got := s.DiffShards(o)
+			got := tt.args.Old.DiffShards(tt.args.New)
 			assert.Equal(t, tt.want, got)
 		})
 	}
