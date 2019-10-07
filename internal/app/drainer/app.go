@@ -58,7 +58,8 @@ type App struct {
 	clusterStateMu sync.RWMutex
 	clusterState   *ClusterState
 
-	events *emitter.Emitter
+	events    *emitter.Emitter
+	postponer *LifecycleActionPostponer
 }
 
 // NewApp returns a new App.
@@ -108,6 +109,7 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 		}
 		app.clients.SQS = sqs.New(cfg)
 		app.clients.AutoScaling = autoscaling.New(cfg)
+		app.postponer = NewLifecycleActionPostponer(app.clients.AutoScaling)
 		app.health.AWSSessionCreated = true
 		return nil
 	})
@@ -290,7 +292,7 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 		}
 	}()
 
-	err = PostponeLifecycleHookAction(
+	err = app.postponer.Postpone(
 		postponeCtx,
 		app.clients.AutoScaling,
 		a,

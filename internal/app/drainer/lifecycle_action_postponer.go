@@ -13,13 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/awserr"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling/autoscalingiface"
-
-	"github.com/mintel/elasticsearch-asg/pkg/events" // AWS CloudWatch Events.
 )
 
 var (
-	lifecycleHookCache *ristretto.Cache
-
 	// ErrLifecycleActionTimeout is returned by PostponeLifecycleHookAction
 	// when the lifecycle action times out (or isn't found in the first place).
 	ErrLifecycleActionTimeout = goerrors.New("lifecycle action timed out")
@@ -29,9 +25,17 @@ var (
 	ErrInvalidLifecycleAction = goerrors.New("invalid lifecycle action")
 )
 
-func init() {
+// LifecycleActionPostponer prevents LifecycleActions from timing out.
+// See the Postpone method for more details.
+type LifecycleActionPostponer struct {
+	client             autoscalingiface.ClientAPI
+	lifecycleHookCache *ristretto.Cache
+}
+
+// NewLifecycleActionPostponer returns a new LifecycleActionPostponer.
+func NewLifecycleActionPostponer(client autoscalingiface.ClientAPI) *LifecycleActionPostponer {
 	// TODO: move this out of a global variable.
-	cache, err := ristretto.NewCache(&ristretto.Config{
+	lifecycleHookCache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 10 * 10,
 		MaxCost:     10,
 		BufferItems: 8,
@@ -40,87 +44,26 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	lifecycleHookCache = cache
-}
-
-// LifecycleAction contains information about on on-going
-// AWS AutoScaling Group scaling event, as related to a
-// Lifecycle Hook on that Group.
-//
-// See also: https://docs.aws.amazon.com/autoscaling/ec2/userguide/lifecycle-hooks.html#lifecycle-hooks-overview
-type LifecycleAction struct {
-	// The name of the AWS AutoScaling Group.
-	AutoScalingGroupName string
-
-	// The name of the Lifecycle Hook attached
-	// to the AutoScaling Group.
-	LifecycleHookName string
-
-	// A unique token (UUID) identifing this particular
-	// autoscaling action.
-	Token string
-
-	// The ID of the EC2 instance effected by the
-	// autoscaling action.
-	InstanceID string
-
-	// One of: "autoscaling:EC2_INSTANCE_LAUNCHING", "autoscaling:EC2_INSTANCE_TERMINATING".
-	LifecycleTransition string
-
-	// The time the autoscaling action started.
-	Start time.Time
-}
-
-// NewLifecycleAction returns a new LifecycleAction from a CloudWatchEvent.
-// It will return ErrInvalidLifecycleAction if the event doesn't represent
-// a valid LifecycleAction.
-func NewLifecycleAction(e *events.CloudWatchEvent) (*LifecycleAction, error) {
-	la := &LifecycleAction{
-		Start: e.Time,
+	return &LifecycleActionPostponer{
+		client:             client,
+		lifecycleHookCache: lifecycleHookCache,
 	}
-	switch d := e.Detail.(type) {
-	// TODO: Add Launching action.
-	case *events.AutoScalingLifecycleTerminateAction:
-		la.AutoScalingGroupName = d.AutoScalingGroupName
-		la.LifecycleHookName = d.LifecycleHookName
-		la.Token = d.LifecycleActionToken
-		la.InstanceID = d.EC2InstanceID
-		la.LifecycleTransition = d.LifecycleTransition
-	default:
-		return nil, ErrInvalidLifecycleAction
-	}
-	return la, nil
 }
 
-// PostponeLifecycleHookAction postpones the timeout of a AWS AutoScaling Group
+// Postpone postpones the timeout of a AWS AutoScaling Group
 // Lifecycle Hook action until the context is canceled, an error occurs, or the
 // Lifecycle Hook's global timeout is reached.
 //
 // If the action expires (or can't be found; there's no way to distinguish
 // in the AWS API) then ErrLifecycleActionTimeout will be returned.
-func PostponeLifecycleHookAction(ctx context.Context, c autoscalingiface.ClientAPI, a *LifecycleAction) error {
+//
+// See also: https://docs.aws.amazon.com/autoscaling/ec2/userguide/lifecycle-hooks.html#lifecycle-hooks-overview
+func (lap *LifecycleActionPostponer) Postpone(ctx context.Context, c autoscalingiface.ClientAPI, a *LifecycleAction) error {
 	// Get Lifecycle Hook description because we need to know
 	// what the timeout for each action it.
-	var hook *autoscaling.LifecycleHook
-	cacheKey := a.AutoScalingGroupName + ":" + a.LifecycleHookName
-	entry, ok := lifecycleHookCache.Get(cacheKey)
-	if ok {
-		hook = entry.(*autoscaling.LifecycleHook)
-	} else {
-		req := c.DescribeLifecycleHooksRequest(&autoscaling.DescribeLifecycleHooksInput{
-			AutoScalingGroupName: aws.String(a.AutoScalingGroupName),
-			LifecycleHookNames:   []string{a.LifecycleHookName},
-		})
-		resp, err := req.Send(ctx)
-		if err != nil {
-			return err
-		}
-		if n := len(resp.LifecycleHooks); n != 1 {
-			zap.L().Panic("got wrong number of lifecycle hooks",
-				zap.Int("count", n))
-		}
-		hook = &resp.LifecycleHooks[0]
-		lifecycleHookCache.Set(cacheKey, hook, 1)
+	hook, err := lap.describeLifecycleHook(ctx, a.AutoScalingGroupName, a.LifecycleHookName)
+	if err != nil {
+		return err
 	}
 
 	timeoutD := time.Duration(aws.Int64Value(hook.HeartbeatTimeout)) * time.Second
@@ -167,4 +110,31 @@ func PostponeLifecycleHookAction(ctx context.Context, c autoscalingiface.ClientA
 			return ErrLifecycleActionTimeout
 		}
 	}
+}
+
+// describeLifecycleHook fetches a description of an AWS AutoScaling Group
+// Lifecycle Hook.
+func (lap *LifecycleActionPostponer) describeLifecycleHook(ctx context.Context, groupName, hookName string) (*autoscaling.LifecycleHook, error) {
+	var hook *autoscaling.LifecycleHook
+	cacheKey := groupName + ":" + hookName
+	entry, ok := lap.lifecycleHookCache.Get(cacheKey)
+	if ok {
+		hook = entry.(*autoscaling.LifecycleHook)
+	} else {
+		req := lap.client.DescribeLifecycleHooksRequest(&autoscaling.DescribeLifecycleHooksInput{
+			AutoScalingGroupName: aws.String(groupName),
+			LifecycleHookNames:   []string{hookName},
+		})
+		resp, err := req.Send(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if n := len(resp.LifecycleHooks); n != 1 {
+			zap.L().Panic("got wrong number of lifecycle hooks",
+				zap.Int("count", n))
+		}
+		hook = &resp.LifecycleHooks[0]
+		lap.lifecycleHookCache.Set(cacheKey, hook, 1)
+	}
+	return hook, nil
 }
