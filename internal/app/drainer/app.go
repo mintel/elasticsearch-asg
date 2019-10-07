@@ -91,6 +91,7 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 			return err
 		}
 		app.clients.Elasticsearch = c
+		app.clients.ESFacade = NewElasticsearchFacade(c)
 		app.health.ElasticSessionCreated = true
 		return nil
 	})
