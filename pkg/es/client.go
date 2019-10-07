@@ -21,22 +21,28 @@ func DialContextRetry(ctx context.Context, init, max time.Duration, options ...e
 	backoff := elastic.NewExponentialBackoff(init, max)
 	retrier := elastic.NewBackoffRetrier(backoff)
 	options = append(options, elastic.SetRetrier(retrier))
+	var err error
 	for i := 0; ; i++ {
-		c, err := elastic.DialContext(ctx, options...)
+		wait, tryAgain, _ := retrier.Retry(ctx, i, nil, nil, err)
+		start := time.Now()
+		c, err := elastic.DialContext(
+			ctx,
+			append(options, elastic.SetHealthcheckTimeoutStartup(wait))...,
+		)
 		if err == nil {
 			return c, nil
 		}
 		if !elastic.IsConnErr(err) {
 			return nil, err
 		}
-		wait, goahead, _ := retrier.Retry(ctx, i, nil, nil, err)
-		if !goahead {
+		if !tryAgain {
 			return nil, err
 		}
+		timeTaken := time.Now().Sub(start)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(wait):
+		case <-time.After(timeTaken - wait):
 		}
 	}
 }

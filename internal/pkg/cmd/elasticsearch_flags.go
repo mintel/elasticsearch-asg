@@ -20,7 +20,7 @@ type ElasticsearchFlags struct {
 		// Initial backoff duration.
 		Init time.Duration
 
-		// max backoff duration.
+		// Max backoff duration.
 		Max time.Duration
 	}
 }
@@ -56,6 +56,5 @@ func (f *ElasticsearchFlags) NewElasticsearchClient(options ...elastic.ClientOpt
 		urls[i] = u.String()
 	}
 	options = append(options, elastic.SetURL(urls...))
-
 	return es.DialRetry(f.Retry.Init, f.Retry.Max, options...)
 }
