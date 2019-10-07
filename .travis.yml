@@ -16,8 +16,6 @@ install:
   - go get -t -v ./...
 
 before_script:
-  # Generate mocks of latest AWS SDK APIs.
-  - GOPROXY=https://proxy.golang.org go get -u github.com/vektra/mockery/cmd/mockery
   - go generate ./...
 
 script:

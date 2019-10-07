@@ -1,7 +1,5 @@
 package metrics
 
-//go:generate sh -c "mockery '-name=Observer.*' -dir=$(go list -f '{{.Dir}}' github.com/prometheus/client_golang/prometheus)"
-
 import (
 	"net/http"
 	"net/http/httptest"

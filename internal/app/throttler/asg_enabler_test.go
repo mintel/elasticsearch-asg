@@ -1,7 +1,5 @@
 package throttler
 
-//go:generate sh -c "mockery -name=ClientAPI -dir=$(go list -f '{{.Dir}}' github.com/aws/aws-sdk-go-v2/service/autoscaling/autoscalingiface)"
-
 import (
 	"errors"
 	"testing"
