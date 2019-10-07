@@ -14,7 +14,7 @@ const (
 	defaultPort                   = 8080
 	defaultLogLevel               = "INFO"
 	defaultElasticsearchRetryInit = 150 * time.Millisecond
-	defaultElasticsearchRetryMax  = 1200 * time.Millisecond
+	defaultElasticsearchRetryMax  = 15 * time.Minute
 )
 
 // Flags holds command line flags for the

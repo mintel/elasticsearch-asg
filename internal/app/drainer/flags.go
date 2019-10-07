@@ -14,7 +14,7 @@ const (
 	defaultLogLevel               = "INFO"
 	defaultAWSMaxRetries          = 5
 	defaultElasticsearchRetryInit = 150 * time.Millisecond
-	defaultElasticsearchRetryMax  = 1200 * time.Millisecond
+	defaultElasticsearchRetryMax  = 15 * time.Minute
 )
 
 // Flags holds command line flags for the
