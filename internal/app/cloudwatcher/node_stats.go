@@ -119,6 +119,9 @@ func (s *NodeStats) HasRole(role string) bool {
 	case "all":
 		return true
 	case "coordinate":
+		// A node that has no other roles still has the implicit role of coordinating
+		// traffic i.e. routing requests to other nodes.
+		// See also: https://www.elastic.co/guide/en/elasticsearch/reference/7.0/modules-node.html#coordinating-node
 		return len(s.Roles) == 0
 	}
 	i := sort.SearchStrings(s.Roles, role)
