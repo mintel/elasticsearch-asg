@@ -388,60 +388,65 @@ func (s NodeStatsSlice) Aggregate(dimensions []cloudwatch.Dimension) []cloudwatc
 		},
 	}
 
-	pools := make(map[string]struct{}, 3)
+	pools := make(map[string]struct{}, 3) // 3 because there are usually 3 memory pools: "young", "survivor", and "old".
 	for _, ns := range s {
 		for pool := range ns.JVMHeapPools {
 			if _, ok := pools[pool]; !ok {
-				func(pool string) { // Make sure refernce to pool isn't shadowed.
-					name := strings.Title(pool)
-					aggs = append(aggs,
-						&StatsData{
-							Template: cloudwatch.MetricDatum{
-								MetricName:        aws.String(fmt.Sprintf("JVM%sPoolMaxBytes", name)),
-								Timestamp:         aws.Time(now),
-								Dimensions:        dimensions,
-								StorageResolution: aws.Int64(1),
-								Unit:              cloudwatch.StandardUnitBytes,
-							},
-							Selector: func(ns *NodeStats) *float64 {
-								f := float64(ns.JVMHeapPools[pool].MaxBytes)
-								return &f
-							},
-						},
+				// Make a copy of pool local to this
+				// if-statement because the StatsData.Selector closures
+				// defined below need references to the right value.
+				// See also: // https://github.com/golang/go/wiki/CommonMistakes#using-goroutines-on-loop-iterator-variables
+				pool := pool
 
-						&StatsData{
-							Template: cloudwatch.MetricDatum{
-								MetricName:        aws.String(fmt.Sprintf("JVM%sPoolUsedBytes", name)),
-								Timestamp:         aws.Time(now),
-								Dimensions:        dimensions,
-								StorageResolution: aws.Int64(1),
-								Unit:              cloudwatch.StandardUnitBytes,
-							},
-							Selector: func(ns *NodeStats) *float64 {
-								f := float64(ns.JVMHeapPools[pool].UsedBytes)
-								return &f
-							},
+				name := strings.Title(pool)
+				aggs = append(aggs,
+					&StatsData{
+						Template: cloudwatch.MetricDatum{
+							MetricName:        aws.String(fmt.Sprintf("JVM%sPoolMaxBytes", name)),
+							Timestamp:         aws.Time(now),
+							Dimensions:        dimensions,
+							StorageResolution: aws.Int64(1),
+							Unit:              cloudwatch.StandardUnitBytes,
 						},
+						Selector: func(ns *NodeStats) *float64 {
+							f := float64(ns.JVMHeapPools[pool].MaxBytes)
+							return &f
+						},
+					},
 
-						&UtilizationData{
-							Template: cloudwatch.MetricDatum{
-								MetricName:        aws.String(fmt.Sprintf("JVM%sPoolUtilization", name)),
-								Timestamp:         aws.Time(now),
-								Dimensions:        dimensions,
-								StorageResolution: aws.Int64(1),
-								Unit:              cloudwatch.StandardUnitPercent,
-							},
-							Numerator: func(ns *NodeStats) *float64 {
-								f := float64(ns.JVMHeapPools[pool].UsedBytes)
-								return &f
-							},
-							Denominator: func(ns *NodeStats) *float64 {
-								f := float64(ns.JVMHeapPools[pool].MaxBytes)
-								return &f
-							},
+					&StatsData{
+						Template: cloudwatch.MetricDatum{
+							MetricName:        aws.String(fmt.Sprintf("JVM%sPoolUsedBytes", name)),
+							Timestamp:         aws.Time(now),
+							Dimensions:        dimensions,
+							StorageResolution: aws.Int64(1),
+							Unit:              cloudwatch.StandardUnitBytes,
 						},
-					)
-				}(pool)
+						Selector: func(ns *NodeStats) *float64 {
+							f := float64(ns.JVMHeapPools[pool].UsedBytes)
+							return &f
+						},
+					},
+
+					&UtilizationData{
+						Template: cloudwatch.MetricDatum{
+							MetricName:        aws.String(fmt.Sprintf("JVM%sPoolUtilization", name)),
+							Timestamp:         aws.Time(now),
+							Dimensions:        dimensions,
+							StorageResolution: aws.Int64(1),
+							Unit:              cloudwatch.StandardUnitPercent,
+						},
+						Numerator: func(ns *NodeStats) *float64 {
+							f := float64(ns.JVMHeapPools[pool].UsedBytes)
+							return &f
+						},
+						Denominator: func(ns *NodeStats) *float64 {
+							f := float64(ns.JVMHeapPools[pool].MaxBytes)
+							return &f
+						},
+					},
+				)
+
 				pools[pool] = struct{}{}
 			}
 		}
