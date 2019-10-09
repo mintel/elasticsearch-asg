@@ -174,7 +174,7 @@ func (app *App) Main(g prometheus.Gatherer) {
 		for r, s := range roles {
 			dimensions := []cloudwatch.Dimension{
 				cloudwatch.Dimension{
-					Name:  aws.String("Cluster"),
+					Name:  aws.String("ClusterName"),
 					Value: aws.String(clusterName),
 				},
 				cloudwatch.Dimension{
