@@ -98,12 +98,6 @@ func (app *App) Main(g prometheus.Gatherer) {
 			CheckReadyJoinedCluster(app.clients.Elasticsearch),
 		)
 	}
-	if !app.flags.DisableCheckRollingUpgrade {
-		app.health.Handler.AddReadinessCheck(
-			"rolling-upgrade",
-			CheckReadyRollingUpgrade(app.clients.Elasticsearch),
-		)
-	}
 
 	if app.flags.Once {
 		r := httptest.NewRequest("GET", app.flags.ReadyPath, nil)

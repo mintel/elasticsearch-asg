@@ -22,9 +22,8 @@ type Flags struct {
 	Once bool
 
 	// Allow various checks to be disabled.
-	DisableCheckHead           bool
-	DisableCheckJoined         bool
-	DisableCheckRollingUpgrade bool
+	DisableCheckHead   bool
+	DisableCheckJoined bool
 
 	*cmd.ElasticsearchFlags
 	*cmd.MonitoringFlags
@@ -42,9 +41,6 @@ func NewFlags(app *kingpin.Application) *Flags {
 
 	app.Flag("no-check-joined-cluster", "Disable joined cluster check.").
 		BoolVar(&f.DisableCheckJoined)
-
-	app.Flag("no-check-rolling-upgrade", "Disable rolling upgrade check.").
-		BoolVar(&f.DisableCheckRollingUpgrade)
 
 	f.ElasticsearchFlags = cmd.NewElasticsearchFlags(app, defaultElasticsearchRetryInit, defaultElasticsearchRetryMax)
 	f.MonitoringFlags = cmd.NewMonitoringFlags(app, defaultPort, defaultLogLevel)
