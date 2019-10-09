@@ -27,8 +27,6 @@ Flags:
       --once                     If true, check health once and exit with a status code.
       --no-check-head            Disable HEAD check.
       --no-check-joined-cluster  Disable joined cluster check.
-      --no-check-rolling-upgrade
-                                 Disable rolling upgrade check.
   -e, --elasticsearch.url=http://127.0.0.1:9200 ...
                                  URL(s) of Elasticsearch.
       --log.level=INFO           Set logging level.
