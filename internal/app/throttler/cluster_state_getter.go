@@ -4,6 +4,7 @@ import (
 	"context"
 
 	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	"github.com/pkg/errors"                 // Wrap errors with stacktraces.
 	"golang.org/x/sync/errgroup"            // Cancel multiple goroutines if one fails.
 
 	"github.com/mintel/elasticsearch-asg/pkg/es" // Extensions to the Elasticsearch client.
@@ -38,7 +39,7 @@ func (sg *ClusterStateGetter) Get() (*ClusterState, error) {
 
 		resp, err := hs.Do(ctx)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "error GET /_cluster/health")
 		}
 		cs.Status = resp.Status
 		cs.RelocatingShards = resp.RelocatingShards > 0
@@ -51,7 +52,7 @@ func (sg *ClusterStateGetter) Get() (*ClusterState, error) {
 			Detailed(false)
 		resp, err := rs.Do(ctx)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "error GET /_cat/recovery")
 		}
 		for _, idx := range resp {
 			for _, s := range idx.Shards {
