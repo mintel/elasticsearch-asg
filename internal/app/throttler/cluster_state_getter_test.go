@@ -60,16 +60,9 @@ func TestClusterStateGetter(t *testing.T) {
 			return
 		}
 		csg := NewClusterStateGetter(client)
-		csg.lastState = &ClusterState{
-			Status:              "red",
-			RelocatingShards:    true,
-			RecoveringFromStore: true,
-		}
 
 		gock.New(elastic.DefaultURL).
 			Get("/_cluster/health").
-			ParamPresent("wait_for_status").
-			ParamPresent("wait_for_no_relocating_shards").
 			Reply(http.StatusOK).
 			JSON(&elastic.ClusterHealthResponse{
 				Status:           "yellow",
