@@ -9,8 +9,6 @@ These target Elasticsearch >= 7.0.
 
 - [cloudwatcher] ([![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-cloudwatcher.svg)](https://hub.docker.com/r/mintel/elasticsearch-cloudwatcher)) - Push metrics about Elasticsearch cluster to AWS CloudWatch, mainly to inform autoscaling.
 
-- [healthchecker] ([![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-healthchecker.svg)](https://hub.docker.com/r/mintel/elasticsearch-healthchecker)) - Provide health and readiness checks for Elasticsearch.
-
 - [drainer] ([![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-drainer.svg)](https://hub.docker.com/r/mintel/elasticsearch-drainer)) - Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated.
 
 - [throttler] ([![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-asg-throttler.svg)](https://hub.docker.com/r/mintel/elasticsearch-asg-throttler)) - Regulate AWS autoscaling of Elasticsearch by delaying new autoscaling actions until cluster is stable.
@@ -40,7 +38,6 @@ go test ./...
 <!-- Links -->
 
 [cloudwatcher]: cmd/cloudwatcher
-[healthchecker]: cmd/healthchecker
 [drainer]: cmd/drainer
 [throttler]: cmd/throttler
 [snapshooter]: cmd/snapshooter
