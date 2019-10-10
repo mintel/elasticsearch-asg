@@ -174,6 +174,7 @@ func (app *App) Main(g prometheus.Gatherer) {
 			app.flags.Queue.String(),
 			app.events,
 		)
+		e.Received = app.inst.MessagesReceived
 		return e.Run(ctx)
 	})
 

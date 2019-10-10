@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
-	"sync/atomic"
 
-	"github.com/olebedev/emitter" // Event bus.
-	"github.com/pkg/errors"       // Wrap errors with stacktrace.
-	"go.uber.org/zap"             // Logging.
+	"github.com/olebedev/emitter"                    // Event bus.
+	"github.com/pkg/errors"                          // Wrap errors with stacktrace.
+	"github.com/prometheus/client_golang/prometheus" // Prometheus metrics.
+	"go.uber.org/zap"                                // Logging.
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -24,9 +24,9 @@ type CloudWatchEventEmitter struct {
 	queue  string
 	events *emitter.Emitter
 
-	// Counters.
-	received int64
-	deleted  int64
+	// Metrics.
+	Received prometheus.Counter
+	Deleted  prometheus.Counter
 }
 
 // NewCloudWatchEventEmitter returns a new CloudWatchEventEmitter.
@@ -73,7 +73,6 @@ func (e *CloudWatchEventEmitter) Run(ctx context.Context) error {
 			if err := e.delete(ctx, msgs); err != nil {
 				return err
 			}
-			atomic.AddInt64(&e.deleted, int64(len(msgs)))
 		}
 	}
 }
@@ -89,7 +88,9 @@ func (e *CloudWatchEventEmitter) receive(ctx context.Context) ([]sqs.Message, er
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting SQS messages")
 	}
-	atomic.AddInt64(&e.received, int64(len(resp.Messages)))
+	if e.Received != nil {
+		e.Received.Add(float64(len(resp.Messages)))
+	}
 	return resp.Messages, nil
 }
 
@@ -113,14 +114,8 @@ func (e *CloudWatchEventEmitter) delete(ctx context.Context, msgs []sqs.Message)
 	if err != nil {
 		return errors.Wrap(err, "error deleting SQS messages")
 	}
-	atomic.AddInt64(&e.deleted, int64(len(msgs)))
+	if e.Deleted != nil {
+		e.Deleted.Add(float64(len(msgs)))
+	}
 	return nil
-}
-
-func (e *CloudWatchEventEmitter) Received() int64 {
-	return atomic.LoadInt64(&e.received)
-}
-
-func (e *CloudWatchEventEmitter) Deleted() int64 {
-	return atomic.LoadInt64(&e.deleted)
 }
