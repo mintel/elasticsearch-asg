@@ -31,10 +31,9 @@ const (
 	Name  = "drainer"
 	Usage = "Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated."
 
-	nodeAdded    = "node-added"
-	nodeEmpty    = "node-empty"
-	nodeNotEmpty = "node-not-empty"
-	nodeRemoved  = "node-removed"
+	nodeAdded   = "node-added"
+	nodeEmpty   = "node-empty"
+	nodeRemoved = "node-removed"
 )
 
 // App holds application state.
@@ -410,21 +409,20 @@ func (app *App) updateClusterState(ctx context.Context) error {
 		removed = uniqStrings(removed...)
 	}
 
-	// Emit events for nodes added/removed/empty/not-empty.
 	toWait := make(emitWaiter, 0, len(added)+len(removed)+len(newState.Nodes))
+	// Emit events for nodes added.
 	for _, n := range added {
 		zap.L().Debug("emit node added", zap.String("node", n))
 		toWait = append(toWait, app.events.Emit(topicKey(nodeAdded, n)))
 	}
+	// Emit events for nodes removed.
 	for _, n := range removed {
 		zap.L().Debug("emit node removed", zap.String("node", n))
 		toWait = append(toWait, app.events.Emit(topicKey(nodeRemoved, n)))
 	}
+	// Emit events for nodes emptied.
 	for _, n := range newState.Nodes {
-		if c, ok := newState.Shards[n]; ok && c > 0 {
-			zap.L().Debug("emit node not empty", zap.String("node", n))
-			toWait = append(toWait, app.events.Emit(topicKey(nodeNotEmpty, n)))
-		} else {
+		if c, ok := newState.Shards[n]; !ok || c == 0 {
 			zap.L().Debug("emit node empty", zap.String("node", n))
 			toWait = append(toWait, app.events.Emit(topicKey(nodeEmpty, n)))
 		}
