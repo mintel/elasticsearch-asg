@@ -401,12 +401,14 @@ func (app *App) updateClusterState(ctx context.Context) error {
 			removed = append(removed, n)
 		}
 	}
-	zap.L().Debug("undraining nodes",
-		zap.Strings("nodes", toUndrain))
-	if err := app.clients.ElasticsearchFacade.UndrainNodes(ctx, toUndrain); err != nil {
-		return errors.Wrap(err, "error while undraining nodes")
+	if len(toUndrain) != 0 {
+		zap.L().Debug("undraining nodes",
+			zap.Strings("nodes", toUndrain))
+		if err := app.clients.ElasticsearchFacade.UndrainNodes(ctx, toUndrain); err != nil {
+			return errors.Wrap(err, "error while undraining nodes")
+		}
+		removed = uniqStrings(removed...)
 	}
-	removed = uniqStrings(removed...)
 
 	// Emit events for nodes added/removed/empty/not-empty.
 	toWait := make(emitWaiter, 0, len(added)+len(removed)+len(newState.Nodes))
