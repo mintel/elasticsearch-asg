@@ -148,7 +148,7 @@ func (app *App) Main(g prometheus.Gatherer) {
 
 	eg, ctx := errgroup.WithContext(context.Background())
 
-	// Poll Elasticsearch once at the start so we have some
+	// Poll Elasticsearch once at the beginning so we have some
 	// idea of the current state.
 	if err := app.updateClusterState(ctx); err != nil {
 		logger.Fatal("error getting cluster state",
@@ -161,6 +161,7 @@ func (app *App) Main(g prometheus.Gatherer) {
 			if err := app.updateClusterState(ctx); err != nil {
 				return err
 			}
+			logger.Debug("updated cluster state")
 			app.inst.PollTotal.Inc()
 		}
 		return nil
@@ -176,22 +177,22 @@ func (app *App) Main(g prometheus.Gatherer) {
 		return e.Run(ctx)
 	})
 
-	// Batch handling of many spot interruptions together.
+	// Batch many spot interruptions together.
 	// That way we don't hit the Elasticsearch cluster settings API
-	// many times if lots of instances get interrupted.
-	spotInterruptions := batchEvents(
+	// many times if lots of instances get interrupted all at once.
+	spotInterruptionEvents := batchEvents(
 		app.events.On(
 			topicKey("aws.ec2", "EC2 Spot Instance Interruption Warning"),
 		),
-		make(chan []emitter.Event, 1),
-		10*time.Millisecond,
-		20,
+		make(chan []emitter.Event, 1), // Channel for the batches.
+		10*time.Millisecond,           // Wait 10ms for more events to come in before returning batch.
+		20,                            // Batch size of at most 20.
 	)
 
-	// We shouldn't need to batch handling of lifecycle termination actions
+	// We shouldn't need to batch autoscaling group termination actions
 	// because an AutoScaling group will only ever terminate one instance
 	// at a time.
-	lifecycleTerminateActions := app.events.On(
+	autoscalingTerminationEvents := app.events.On(
 		topicKey("aws.autoscaling", "EC2 Instance-terminate Lifecycle Action"),
 	)
 
@@ -201,7 +202,7 @@ loop:
 		case <-ctx.Done():
 			break loop
 
-		case batch, ok := <-spotInterruptions:
+		case batch, ok := <-spotInterruptionEvents:
 			app.inst.MessagesReceived.Add(float64(len(batch)))
 			app.inst.SpotInterruptions.Add(float64(len(batch)))
 			if !ok {
@@ -210,18 +211,22 @@ loop:
 			cwes := make([]*events.CloudWatchEvent, len(batch))
 			for i, e := range batch {
 				cwes[i] = e.Args[0].(*events.CloudWatchEvent)
+				logger.Info("got spot interruption cloudwatch event",
+					zap.String("instance", cwes[i].Detail.(*events.EC2SpotInterruption).InstanceID))
 			}
 			eg.Go(func() error {
 				return app.handleSpotInterruptionEvent(ctx, cwes)
 			})
 
-		case e, ok := <-lifecycleTerminateActions:
+		case e, ok := <-autoscalingTerminationEvents:
 			app.inst.MessagesReceived.Inc()
 			app.inst.TerminationHookActionsTotal.Inc()
 			if !ok {
 				logger.Panic("event listener closed")
 			}
 			cwe := e.Args[0].(*events.CloudWatchEvent)
+			logger.Info("got lifecycle termination action cloudwatch event",
+				zap.String("instance", cwe.Detail.(*events.AutoScalingLifecycleTerminateAction).EC2InstanceID))
 			eg.Go(func() error {
 				app.inst.TerminationHookActionsInProgress.Inc()
 				defer app.inst.TerminationHookActionsInProgress.Dec()
@@ -260,38 +265,66 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 		return err
 	}
 
+	zap.L().Info("draining node", zap.String("node", a.InstanceID))
 	err = app.clients.ElasticsearchFacade.DrainNodes(ctx, []string{a.InstanceID})
 	if err != nil {
 		return err
 	}
 
+	// Wait until an event arrives indicating that the node is either
+	// empty of all shards or has left the cluster for some reason.
+	// While waiting, periodically record a heartbeat for the lifecycle action
+	// so it doesn't timeout.
+
+	// Add a global cancel to the context so we can stop everything in
+	// case of an error.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	// Use this context/cancel to stop recording the lifecycle action heartbeat
+	// once the drained/removed event comes in.
 	postponeCtx, postponeCancel := context.WithCancel(ctx)
 	defer postponeCancel()
+
+	// Wait for the event(s) in a goroutine.
+	// Cancel the postponeCtx once it arrives.
 	go func() {
 		k := topicKey(nodeEmpty, a.InstanceID)
-		empty := app.events.Once(k)
-		defer app.events.Off(k, empty)
+		emptyChan := app.events.Once(k)
+		defer app.events.Off(k, emptyChan)
 
 		k = topicKey(nodeRemoved, a.InstanceID)
-		removed := app.events.Once(k)
-		defer app.events.Off(k, removed)
+		removedChan := app.events.Once(k)
+		defer app.events.Off(k, removedChan)
 
-		var ok bool
+		defer postponeCancel()
 		select {
 		case <-postponeCtx.Done():
+			// This might happend if the lifecycle action global
+			// timeout is reached.
 			return
-		case _, ok = <-empty:
-		case _, ok = <-removed:
-		}
-		if ok {
-			postponeCancel()
-		} else {
-			cancel()
+
+		case _, ok := <-emptyChan:
+			if ok {
+				zap.L().Debug("node empty",
+					zap.String("node", a.InstanceID))
+			} else {
+				zap.L().DPanic("node empty channel was closed",
+					zap.String("node", a.InstanceID))
+			}
+
+		case _, ok := <-removedChan:
+			if ok {
+				zap.L().Debug("node removed from cluster",
+					zap.String("node", a.InstanceID))
+			} else {
+				zap.L().DPanic("node removed channel was closed",
+					zap.String("node", a.InstanceID))
+			}
 		}
 	}()
 
+	// Record the lifecycle action heartbeat.
 	err = app.postponer.Postpone(
 		postponeCtx,
 		app.clients.AutoScaling,
@@ -299,16 +332,33 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 	)
 	switch err {
 	case nil, context.Canceled:
+		select {
+		case <-ctx.Done():
+			// Something external canceled the the context that was
+			// originally passed in.
+			return ctx.Err()
+		case <-postponeCtx.Done():
+			// A drained/removed event came in. Continue.
+		default:
+			zap.L().Panic("postponer return canceled error without context actually being canceled")
+		}
 	case ErrLifecycleActionTimeout:
+		// The lifecycle action reached it's global timeout.
 		// This probably shouldn't happen, but it's
 		// not a reason to stop the world.
 		zap.L().Error("lifecycle action timed out",
 			zap.Error(err))
 		return nil
 	default:
+		// Some other error happend while recording the lifecycle
+		// action heartbeat.
 		return err
 	}
 
+	// Complete the autoscaling lifecycle termination action,
+	// allowing other autoscaling events to happen.
+	zap.L().Debug("completing termination lifecycle action",
+		zap.String("instance", a.InstanceID))
 	req := app.clients.AutoScaling.CompleteLifecycleActionRequest(&autoscaling.CompleteLifecycleActionInput{
 		AutoScalingGroupName:  aws.String(a.AutoScalingGroupName),
 		LifecycleHookName:     aws.String(a.LifecycleHookName),
@@ -320,15 +370,15 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 	if err != nil {
 		// It's not really a problem if we can't complete the lifecycle event
 		// because it will timeout on its own eventually.
-		zap.L().Warn("error while completing termination lifecycle action",
+		zap.L().Warn("failed to complete complete termination lifecycle action",
 			zap.Error(err))
 	}
+
 	return nil
 }
 
-// updateState polls Elasticsearch for updated state information,
-// and cleans up shard allocation exclusions for nodes that have
-// left the cluster.
+// updateState polls Elasticsearch for updated information about the cluster's state,
+// and also cleans up shard allocation exclusions for nodes that have left the cluster.
 func (app *App) updateClusterState(ctx context.Context) error {
 	app.clusterStateMu.Lock()
 	defer app.clusterStateMu.Unlock()
@@ -337,9 +387,9 @@ func (app *App) updateClusterState(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "error getting cluster state")
 	}
+
 	oldState := app.clusterState
 	app.clusterState = newState
-
 	added, removed := oldState.DiffNodes(newState)
 
 	// Clean up drained nodes that are no longer in the cluster.
@@ -350,6 +400,8 @@ func (app *App) updateClusterState(ctx context.Context) error {
 			removed = append(removed, n)
 		}
 	}
+	zap.L().Debug("undraining nodes",
+		zap.Strings("nodes", toUndrain))
 	if err := app.clients.ElasticsearchFacade.UndrainNodes(ctx, toUndrain); err != nil {
 		return errors.Wrap(err, "error while undraining nodes")
 	}
@@ -358,15 +410,19 @@ func (app *App) updateClusterState(ctx context.Context) error {
 	// Emit events for nodes added/removed/empty/not-empty.
 	toWait := make(emitWaiter, 0, len(added)+len(removed)+len(newState.Nodes))
 	for _, n := range added {
+		zap.L().Debug("emit node added", zap.String("node", n))
 		toWait = append(toWait, app.events.Emit(topicKey(nodeAdded, n)))
 	}
 	for _, n := range removed {
+		zap.L().Debug("emit node removed", zap.String("node", n))
 		toWait = append(toWait, app.events.Emit(topicKey(nodeRemoved, n)))
 	}
 	for _, n := range newState.Nodes {
 		if c, ok := newState.Shards[n]; ok && c > 0 {
+			zap.L().Debug("emit node not empty", zap.String("node", n))
 			toWait = append(toWait, app.events.Emit(topicKey(nodeNotEmpty, n)))
 		} else {
+			zap.L().Debug("emit node empty", zap.String("node", n))
 			toWait = append(toWait, app.events.Emit(topicKey(nodeEmpty, n)))
 		}
 	}
