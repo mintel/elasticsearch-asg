@@ -221,7 +221,7 @@ func (s NodeStatsSlice) Aggregate(dimensions []cloudwatch.Dimension) []cloudwatc
 				Timestamp:         aws.Time(now),
 				Dimensions:        dimensions,
 				StorageResolution: aws.Int64(1),
-				Unit:              cloudwatch.StandardUnitNone,
+				Unit:              cloudwatch.StandardUnitPercent,
 			},
 			Numerator: func(ns *NodeStats) *float64 {
 				return &ns.Load1m
@@ -238,7 +238,7 @@ func (s NodeStatsSlice) Aggregate(dimensions []cloudwatch.Dimension) []cloudwatc
 				Timestamp:         aws.Time(now),
 				Dimensions:        dimensions,
 				StorageResolution: aws.Int64(1),
-				Unit:              cloudwatch.StandardUnitNone,
+				Unit:              cloudwatch.StandardUnitPercent,
 			},
 			Numerator: func(ns *NodeStats) *float64 {
 				return &ns.Load5m
@@ -255,7 +255,7 @@ func (s NodeStatsSlice) Aggregate(dimensions []cloudwatch.Dimension) []cloudwatc
 				Timestamp:         aws.Time(now),
 				Dimensions:        dimensions,
 				StorageResolution: aws.Int64(1),
-				Unit:              cloudwatch.StandardUnitNone,
+				Unit:              cloudwatch.StandardUnitPercent,
 			},
 			Numerator: func(ns *NodeStats) *float64 {
 				return &ns.Load15m
