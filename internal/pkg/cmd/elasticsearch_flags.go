@@ -55,10 +55,10 @@ func (f *ElasticsearchFlags) NewElasticsearchClient(options ...elastic.ClientOpt
 	}
 	backoff := elastic.NewExponentialBackoff(f.Retry.Init, f.Retry.Max)
 	retrier := elastic.NewBackoffRetrier(backoff)
-	elastic.SetRetrier(retrier)
 	options = append(
 		options,
 		elastic.SetURL(urls...),
+		elastic.SetRetrier(retrier),
 		elastic.SetHealthcheckTimeout(f.Retry.Max),
 		elastic.SetHealthcheckTimeoutStartup(f.Retry.Max),
 	)
