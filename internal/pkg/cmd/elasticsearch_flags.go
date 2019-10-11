@@ -59,7 +59,6 @@ func (f *ElasticsearchFlags) NewElasticsearchClient(options ...elastic.ClientOpt
 		options,
 		elastic.SetURL(urls...),
 		elastic.SetRetrier(retrier),
-		elastic.SetHealthcheckTimeout(f.Retry.Max),
 		elastic.SetHealthcheckTimeoutStartup(f.Retry.Max),
 	)
 	return elastic.NewClient(options...)
