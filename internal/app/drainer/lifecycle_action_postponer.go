@@ -103,6 +103,10 @@ func (lap *LifecycleActionPostponer) Postpone(ctx context.Context, c autoscaling
 			} else if err != nil {
 				return err
 			}
+			zap.L().Debug("recorded lifecycle action heartbeat",
+				zap.String("autoscaling_group", a.AutoScalingGroupName),
+				zap.String("lifecycle_hook", a.LifecycleHookName),
+				zap.String("instance", a.InstanceID))
 			timeout = timeout.Add(timeoutD)
 			halfWayToTimeout.Reset(timeout.Sub(time.Now()) / 2)
 
@@ -120,6 +124,9 @@ func (lap *LifecycleActionPostponer) describeLifecycleHook(ctx context.Context, 
 	entry, ok := lap.lifecycleHookCache.Get(cacheKey)
 	if ok {
 		hook = entry.(*autoscaling.LifecycleHook)
+		zap.L().Debug("got lifecycle hook from cache",
+			zap.String("autoscaling_group", *hook.AutoScalingGroupName),
+			zap.String("lifecycle_hook", *hook.LifecycleHookName))
 	} else {
 		req := lap.client.DescribeLifecycleHooksRequest(&autoscaling.DescribeLifecycleHooksInput{
 			AutoScalingGroupName: aws.String(groupName),
@@ -134,6 +141,9 @@ func (lap *LifecycleActionPostponer) describeLifecycleHook(ctx context.Context, 
 				zap.Int("count", n))
 		}
 		hook = &resp.LifecycleHooks[0]
+		zap.L().Debug("described lifecycle hook",
+			zap.String("autoscaling_group", *hook.AutoScalingGroupName),
+			zap.String("lifecycle_hook", *hook.LifecycleHookName))
 		lap.lifecycleHookCache.Set(cacheKey, hook, 1)
 	}
 	return hook, nil
