@@ -31,9 +31,9 @@ const (
 	Name  = "drainer"
 	Usage = "Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated."
 
-	nodeAdded   = "node-added"
-	nodeEmpty   = "node-empty"
-	nodeRemoved = "node-removed"
+	_nodeAdded   = "node-added"
+	_nodeEmpty   = "node-empty"
+	_nodeRemoved = "node-removed"
 )
 
 // App holds application state.
@@ -289,11 +289,11 @@ func (app *App) handleLifecycleTerminateActionEvent(ctx context.Context, e *even
 	// Wait for the event(s) in a goroutine.
 	// Cancel the postponeCtx once it arrives.
 	go func() {
-		k := topicKey(nodeEmpty, a.InstanceID)
+		k := topicKey(_nodeEmpty, a.InstanceID)
 		emptyChan := app.events.Once(k)
 		defer app.events.Off(k, emptyChan)
 
-		k = topicKey(nodeRemoved, a.InstanceID)
+		k = topicKey(_nodeRemoved, a.InstanceID)
 		removedChan := app.events.Once(k)
 		defer app.events.Off(k, removedChan)
 
@@ -413,18 +413,18 @@ func (app *App) updateClusterState(ctx context.Context) error {
 	// Emit events for nodes added.
 	for _, n := range added {
 		zap.L().Debug("emit node added", zap.String("node", n))
-		toWait = append(toWait, app.events.Emit(topicKey(nodeAdded, n)))
+		toWait = append(toWait, app.events.Emit(topicKey(_nodeAdded, n)))
 	}
 	// Emit events for nodes removed.
 	for _, n := range removed {
 		zap.L().Debug("emit node removed", zap.String("node", n))
-		toWait = append(toWait, app.events.Emit(topicKey(nodeRemoved, n)))
+		toWait = append(toWait, app.events.Emit(topicKey(_nodeRemoved, n)))
 	}
 	// Emit events for nodes emptied.
 	for _, n := range newState.Nodes {
 		if c, ok := newState.Shards[n]; !ok || c == 0 {
 			zap.L().Debug("emit node empty", zap.String("node", n))
-			toWait = append(toWait, app.events.Emit(topicKey(nodeEmpty, n)))
+			toWait = append(toWait, app.events.Emit(topicKey(_nodeEmpty, n)))
 		}
 	}
 

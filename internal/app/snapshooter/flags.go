@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	defaultPort                   = 8080
-	defaultLogLevel               = "INFO"
-	defaultElasticsearchRetryInit = 150 * time.Millisecond
-	defaultElasticsearchRetryMax  = 15 * time.Minute
+	_defaultPort                   = 8080
+	_defaultLogLevel               = "INFO"
+	_defaultElasticsearchRetryInit = 150 * time.Millisecond
+	_defaultElasticsearchRetryMax  = 15 * time.Minute
 )
 
 // Flags holds command line flags for the
@@ -82,8 +82,8 @@ func NewFlags(app *kingpin.Application) *Flags {
 	app.Flag("dry-run", "If set, print actions without taking them.").
 		BoolVar(&f.DryRun)
 
-	f.ElasticsearchFlags = cmd.NewElasticsearchFlags(app, defaultElasticsearchRetryInit, defaultElasticsearchRetryMax)
-	f.MonitoringFlags = cmd.NewMonitoringFlags(app, defaultPort, defaultLogLevel)
+	f.ElasticsearchFlags = cmd.NewElasticsearchFlags(app, _defaultElasticsearchRetryInit, _defaultElasticsearchRetryMax)
+	f.MonitoringFlags = cmd.NewMonitoringFlags(app, _defaultPort, _defaultLogLevel)
 
 	return &f
 }

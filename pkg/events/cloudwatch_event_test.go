@@ -43,7 +43,7 @@ func ExampleRegisterDetailType() {
 		Key2 string `json:"key2"`
 	}
 
-	events.RegisterDetailType(
+	events.MustRegisterDetailType(
 		"com.mycompany.myapp",
 		"myDetailType",
 		reflect.TypeOf(MyDetailType{}),

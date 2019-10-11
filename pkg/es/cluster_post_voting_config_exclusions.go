@@ -83,7 +83,7 @@ func (s *ClusterPostVotingConfigExclusion) Do(ctx context.Context) (*ClusterPost
 	}
 
 	// Return operation response
-	ret := new(ClusterPostVotingConfigExclusionResponse)
+	ret := &ClusterPostVotingConfigExclusionResponse{}
 	return ret, nil
 }
 

@@ -152,7 +152,7 @@ func (s *CatShardsService) Do(ctx context.Context) (CatShardsResponse, error) {
 
 	// Return operation response
 	var ret CatShardsResponse
-	if err := (new(elastic.DefaultDecoder)).Decode(res.Body, &ret); err != nil {
+	if err := (&elastic.DefaultDecoder{}).Decode(res.Body, &ret); err != nil {
 		return nil, err
 	}
 	return ret, nil

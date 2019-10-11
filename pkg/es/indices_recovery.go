@@ -115,7 +115,7 @@ func (s *IndicesRecoveryService) Do(ctx context.Context) (IndicesRecoveryRespons
 
 	// Return operation response
 	var ret IndicesRecoveryResponse
-	if err := new(elastic.DefaultDecoder).Decode(res.Body, &ret); err != nil {
+	if err := (&elastic.DefaultDecoder{}).Decode(res.Body, &ret); err != nil {
 		return nil, err
 	}
 	return ret, nil

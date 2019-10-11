@@ -20,4 +20,8 @@ const (
 
 	// LabelOperation is the Prometheus label name for the AWS region label.
 	LabelRegion = "region"
+
+	// LabelEvent is used by InstrumentHTTP() to describe the different stages of
+	// an HTTP connection (DNS resolution, TLS handshake, etc).
+	LabelEvent = "event"
 )

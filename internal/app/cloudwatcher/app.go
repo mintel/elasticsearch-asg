@@ -31,7 +31,7 @@ const (
 
 	// Batch size when pushing metrics to CloudWatch.
 	// This is the max allowed by the AWS API.
-	batchSize = 20
+	_batchSize = 20
 )
 
 // App holds application state.
@@ -316,8 +316,8 @@ func (app *App) getSettings() (*es.ClusterGetSettingsResponse, error) {
 //	- Max 10 dimensions per metric
 // Send metrics compressed and in batches.
 func (app *App) pushCloudwatchData(data []cloudwatch.MetricDatum) error {
-	for i := 0; i < len(data); i += batchSize {
-		j := i + batchSize
+	for i := 0; i < len(data); i += _batchSize {
+		j := i + _batchSize
 		if j > len(data) {
 			j = len(data)
 		}

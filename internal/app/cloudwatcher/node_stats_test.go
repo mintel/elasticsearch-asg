@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	nvcpu = 2
-	delta = 0.001
+	_nvcpu = 2
+	_delta = 0.001
 )
 
 type NodeStatsTestSuite struct {
@@ -46,7 +46,7 @@ func (suite *NodeStatsTestSuite) SetupTest() {
 	for _, n := range suite.statsNodes {
 		suite.ec2Instances = append(suite.ec2Instances, &EC2Instance{
 			ID:    n.Name,
-			VCPUs: nvcpu,
+			VCPUs: _nvcpu,
 		})
 	}
 
@@ -141,7 +141,7 @@ func (suite *NodeStatsTestSuite) TestNodeStatsSlice_Aggregate() {
 		Unit:              cloudwatch.StandardUnitCount,
 		Dimensions:        dimensions,
 		StorageResolution: aws.Int64(1),
-		Value:             aws.Float64(nvcpu * 9),
+		Value:             aws.Float64(_nvcpu * 9),
 	})
 
 	suite.ContainsMetric(got, cloudwatch.MetricDatum{
@@ -402,28 +402,28 @@ func (suite *NodeStatsTestSuite) ContainsMetric(s []cloudwatch.MetricDatum, v cl
 		)
 
 		ok = ok && suite.InDelta(
-			aws.Float64Value(v.Value), aws.Float64Value(m.Value), delta,
+			aws.Float64Value(v.Value), aws.Float64Value(m.Value), _delta,
 			"metric %s doesn't have expected Value", name,
 		)
 
 		if suite.True((v.StatisticValues == nil) == (m.StatisticValues == nil)) && m.StatisticValues != nil {
 			ok = ok && suite.InDelta(
-				aws.Float64Value(v.StatisticValues.Maximum), aws.Float64Value(m.StatisticValues.Maximum), delta,
+				aws.Float64Value(v.StatisticValues.Maximum), aws.Float64Value(m.StatisticValues.Maximum), _delta,
 				"metric %s.StatisticValues.Maximum doesn't have the expected value", name,
 			)
 
 			ok = ok && suite.InDelta(
-				aws.Float64Value(v.StatisticValues.Minimum), aws.Float64Value(m.StatisticValues.Minimum), delta,
+				aws.Float64Value(v.StatisticValues.Minimum), aws.Float64Value(m.StatisticValues.Minimum), _delta,
 				"metric %s.StatisticValues.Minimum doesn't have the expected value", name,
 			)
 
 			ok = ok && suite.InDelta(
-				aws.Float64Value(v.StatisticValues.Sum), aws.Float64Value(m.StatisticValues.Sum), delta,
+				aws.Float64Value(v.StatisticValues.Sum), aws.Float64Value(m.StatisticValues.Sum), _delta,
 				"metric %s.StatisticValues.Sum doesn't have the expected value", name,
 			)
 
 			ok = ok && suite.InDelta(
-				aws.Float64Value(v.StatisticValues.SampleCount), aws.Float64Value(m.StatisticValues.SampleCount), delta,
+				aws.Float64Value(v.StatisticValues.SampleCount), aws.Float64Value(m.StatisticValues.SampleCount), _delta,
 				"metric %s.StatisticValues.SampleCount doesn't have the expected value", name,
 			)
 		} else {

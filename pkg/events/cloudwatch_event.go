@@ -24,35 +24,44 @@ var (
 	// DetailType.
 	ErrInvalidCloudWatchEvent = errors.New("invalid CloudWatch event")
 
-	detailRegistryMu sync.RWMutex
-	detailRegistry   = make(map[string]reflect.Type)
+	// ErrDetailTypeAlreadyRegistered is returned by RegisterDetailType() when a
+	// detail type has already been registered.
+	ErrDetailTypeAlreadyRegistered = errors.New("detail type already registered")
 )
+
+var _detailRegistry = sync.Map{}
 
 func detailTypeKey(source, detailType string) string {
 	return source + ":" + detailType
 }
 
 // RegisterDetailType can be used to register custom CloudWatch
-// event types
-func RegisterDetailType(source, detailType string, t reflect.Type) {
-	detailRegistryMu.Lock()
-	defer detailRegistryMu.Unlock()
+// event types. It returns ErrDetailTypeAlreadyRegistered if
+// source and detailType has already been registered.
+func RegisterDetailType(source, detailType string, t reflect.Type) error {
 	key := detailTypeKey(source, detailType)
-	if _, ok := detailRegistry[key]; ok {
-		panic("detail type already registered")
+	if _, loaded := _detailRegistry.LoadOrStore(key, t); loaded {
+		return ErrDetailTypeAlreadyRegistered
 	}
-	detailRegistry[key] = t
+	return nil
+}
+
+// RegisterDetailType can be used to register custom CloudWatch
+// event types. It panics if source and detailType has already
+// been registered.
+func MustRegisterDetailType(source, detailType string, t reflect.Type) {
+	if err := RegisterDetailType(source, detailType, t); err != nil {
+		panic(err)
+	}
 }
 
 func newDetail(source, detailType string) interface{} {
-	detailRegistryMu.RLock()
-	defer detailRegistryMu.RUnlock()
 	key := detailTypeKey(source, detailType)
-	t, ok := detailRegistry[key]
+	t, ok := _detailRegistry.Load(key)
 	if !ok {
 		return nil
 	}
-	d := reflect.New(t).Interface()
+	d := reflect.New(t.(reflect.Type)).Interface()
 	return d
 }
 

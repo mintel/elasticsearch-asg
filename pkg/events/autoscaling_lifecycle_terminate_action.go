@@ -5,7 +5,7 @@ import (
 )
 
 func init() {
-	RegisterDetailType(
+	MustRegisterDetailType(
 		"aws.autoscaling",
 		"EC2 Instance-terminate Lifecycle Action",
 		reflect.TypeOf(AutoScalingLifecycleTerminateAction{}),

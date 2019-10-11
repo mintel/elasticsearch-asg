@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	defaultPort                   = 8080
-	defaultLogLevel               = "INFO"
-	defaultAWSMaxRetries          = 5
-	defaultElasticsearchRetryInit = 150 * time.Millisecond
-	defaultElasticsearchRetryMax  = 15 * time.Minute
+	_defaultPort                   = 8080
+	_defaultLogLevel               = "INFO"
+	_defaultAWSMaxRetries          = 5
+	_defaultElasticsearchRetryInit = 150 * time.Millisecond
+	_defaultElasticsearchRetryMax  = 15 * time.Minute
 )
 
 // Flags holds command line flags for the
@@ -53,9 +53,9 @@ func NewFlags(app *kingpin.Application) *Flags {
 	app.Flag("dry-run", "Log actions without actually taking them.").
 		BoolVar(&f.DryRun)
 
-	f.AWSFlags = cmd.NewAWSFlags(app, defaultAWSMaxRetries)
-	f.ElasticsearchFlags = cmd.NewElasticsearchFlags(app, defaultElasticsearchRetryInit, defaultElasticsearchRetryMax)
-	f.MonitoringFlags = cmd.NewMonitoringFlags(app, defaultPort, defaultLogLevel)
+	f.AWSFlags = cmd.NewAWSFlags(app, _defaultAWSMaxRetries)
+	f.ElasticsearchFlags = cmd.NewElasticsearchFlags(app, _defaultElasticsearchRetryInit, _defaultElasticsearchRetryMax)
+	f.MonitoringFlags = cmd.NewMonitoringFlags(app, _defaultPort, _defaultLogLevel)
 
 	return &f
 }

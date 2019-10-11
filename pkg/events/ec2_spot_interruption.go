@@ -5,7 +5,7 @@ import (
 )
 
 func init() {
-	RegisterDetailType(
+	MustRegisterDetailType(
 		"aws.ec2",
 		"EC2 Spot Instance Interruption Warning",
 		reflect.TypeOf(EC2SpotInterruption{}),

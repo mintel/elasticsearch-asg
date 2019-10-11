@@ -364,7 +364,7 @@ func Test_utilizationData_Datum(t *testing.T) {
 			if tt.want == nil {
 				assert.Nil(t, got)
 			} else {
-				assert.InDelta(t, *tt.want.Value, *got.Value, delta)
+				assert.InDelta(t, *tt.want.Value, *got.Value, _delta)
 				tt.want.Value = nil
 				got.Value = nil
 				assert.Equal(t, tt.want, got)

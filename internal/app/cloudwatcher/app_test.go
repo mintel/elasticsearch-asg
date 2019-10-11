@@ -264,7 +264,7 @@ func TestApp_pushCloudwatchData(t *testing.T) {
 			Value:             aws.Float64(1),
 		},
 	}
-	for i := 0; i < (2*batchSize)-1; i++ {
+	for i := 0; i < (2*_batchSize)-1; i++ {
 		datums = append(datums, datums[0])
 	}
 
@@ -273,11 +273,11 @@ func TestApp_pushCloudwatchData(t *testing.T) {
 
 		input1 := &cloudwatch.PutMetricDataInput{
 			Namespace:  aws.String(namespace),
-			MetricData: datums[:batchSize],
+			MetricData: datums[:_batchSize],
 		}
 		input2 := &cloudwatch.PutMetricDataInput{
 			Namespace:  aws.String(namespace),
-			MetricData: datums[batchSize:],
+			MetricData: datums[_batchSize:],
 		}
 		output := &cloudwatch.PutMetricDataOutput{}
 

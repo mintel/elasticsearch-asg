@@ -7,10 +7,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const (
-	LabelEvent = "event"
-)
-
 // InstrumentHTTP returns a new HTTP client instrumented
 // with Prometheus metrics.
 //
