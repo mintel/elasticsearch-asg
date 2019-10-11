@@ -31,7 +31,7 @@ RUN apt-get update -y \
     && update-ca-certificates
 
 # Build the binary
-RUN CGO_ENABLED=0 go build -ldflags='-w -s' -o /go/bin/drainer ./cmd/drainer
+RUN CGO_ENABLED=0 go build -ldflags='-w -s' -trimpath -o /go/bin/drainer ./cmd/drainer
 
 ##########################
 # STAGE 2 deployment image
