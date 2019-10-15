@@ -43,7 +43,7 @@ import (
 func Keep(c Config, snapshots []time.Time) []time.Time {
 	shots := make(timeseries, 0, len(snapshots)+1)
 	shots.Push(snapshots...)
-	newest := shots.PeakNewest()
+	newest := shots.PeekNewest()
 	buks := newBuckets(c, newest)
 	buks.Assign(shots)
 
@@ -65,10 +65,10 @@ func Keep(c Config, snapshots []time.Time) []time.Time {
 			continue
 		}
 		// Keep the oldest snapshot in each bucket.
-		keep.Push(b.Snapshots.PeakOldest())
+		keep.Push(b.Snapshots.PeekOldest())
 		// Keep the very newest snapshot of all.
 		if i == len(buks)-1 {
-			keep.Push(b.Snapshots.PeakNewest())
+			keep.Push(b.Snapshots.PeekNewest())
 		}
 	}
 
@@ -159,7 +159,7 @@ func redistributeBackups(buckets buckets) {
 			if len(nb.Snapshots) == 0 {
 				continue
 			}
-			distance := nb.Snapshots.PeakOldest().Sub(b.End)
+			distance := nb.Snapshots.PeekOldest().Sub(b.End)
 			if distance <= close {
 				snap := nb.Snapshots.PopOldest()
 				b.Snapshots.Push(snap)
@@ -170,7 +170,7 @@ func redistributeBackups(buckets buckets) {
 			// of the snapshots is close to the boundary with the
 			// next newest bucket, reassign that backup to the
 			// newer bucket.
-			distance := b.End.Sub(b.Snapshots.PeakNewest())
+			distance := b.End.Sub(b.Snapshots.PeekNewest())
 			if distance <= close {
 				snap := b.Snapshots.PopNewest()
 				nb.Snapshots.Push(snap)

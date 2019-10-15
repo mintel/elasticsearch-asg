@@ -69,9 +69,9 @@ func (s *timeseries) PopOldest() time.Time {
 	return s.Pop(0)
 }
 
-// PeakOldest returns the oldest snapshot in the slice.
+// PeekOldest returns the oldest snapshot in the slice.
 // If the slice is empty it returns the zero Time.
-func (s timeseries) PeakOldest() time.Time {
+func (s timeseries) PeekOldest() time.Time {
 	if len(s) == 0 {
 		return time.Time{}
 	}
@@ -89,9 +89,9 @@ func (s *timeseries) PopNewest() time.Time {
 	return s.Pop(n - 1)
 }
 
-// PeakNewest returns the newest snapshot in the slice.
+// PeekNewest returns the newest snapshot in the slice.
 // If the slice is empty it returns the zero Time.
-func (s timeseries) PeakNewest() time.Time {
+func (s timeseries) PeekNewest() time.Time {
 	n := len(s)
 	if n == 0 {
 		return time.Time{}

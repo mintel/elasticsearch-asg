@@ -197,29 +197,29 @@ func Test_timeseries_PopOldest(t *testing.T) {
 	}
 }
 
-func Test_timeseries_PeakOldest(t *testing.T) {
+func Test_timeseries_PeekOldest(t *testing.T) {
 	hasProperties := func(ts timeseries) bool {
 		n := len(ts)
-		v := ts.PeakOldest()
+		v := ts.PeekOldest()
 		if n == 0 {
 			return v.IsZero()
 		}
 		pass := assertTimeseriesSorted(t, ts)
 		pass = pass && assert.Len(
 			t, ts, n,
-			"peaked timeseries has different length",
+			"peeked timeseries has different length",
 		)
 		for i := 0; i < len(ts); i++ {
 			if i == 0 {
 				pass = pass && assert.True(
 					t, v.Equal(ts[i]),
-					"peaked oldest not equal to oldest in timeseries: %s < %s",
+					"peeked oldest not equal to oldest in timeseries: %s < %s",
 					ts[i], v,
 				)
 			} else {
 				pass = pass && assert.True(
 					t, v.Before(ts[i]),
-					"peakold oldest not oldest in timeseries: %s (index %d) < %s",
+					"peekold oldest not oldest in timeseries: %s (index %d) < %s",
 					ts[i], i, v,
 				)
 			}
@@ -265,29 +265,29 @@ func Test_timeseries_PopNewest(t *testing.T) {
 	}
 }
 
-func Test_timeseries_PeakNewest(t *testing.T) {
+func Test_timeseries_PeekNewest(t *testing.T) {
 	hasProperties := func(ts timeseries) bool {
 		n := len(ts)
-		v := ts.PeakNewest()
+		v := ts.PeekNewest()
 		if n == 0 {
 			return v.IsZero()
 		}
 		pass := assertTimeseriesSorted(t, ts)
 		pass = pass && assert.Len(
 			t, ts, n,
-			"peaked timeseries has a different length",
+			"peeked timeseries has a different length",
 		)
 		for i := 0; i < len(ts); i++ {
 			if i < len(ts)-1 {
 				pass = pass && assert.True(
 					t, ts[i].Before(ts[i+1]),
-					"peaked newest isn't newer than timeseries newest: %s (index %d) > %s",
+					"peeked newest isn't newer than timeseries newest: %s (index %d) > %s",
 					ts[i], i, v,
 				)
 			} else {
 				pass = pass && assert.True(
 					t, v.Equal(ts[i]),
-					"peaked newest isn't newer than other value: %s (index %d) > %s",
+					"peeked newest isn't newer than other value: %s (index %d) > %s",
 					ts[i], i, v,
 				)
 			}
