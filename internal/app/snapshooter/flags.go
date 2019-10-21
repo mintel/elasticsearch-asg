@@ -35,7 +35,8 @@ type Flags struct {
 	DryRun bool
 
 	*cmd.ElasticsearchFlags
-	*cmd.MonitoringFlags
+	*cmd.LoggingFlags
+	*cmd.ServerFlags
 }
 
 // NewFlags returns a new Flags.
@@ -83,7 +84,8 @@ func NewFlags(app *kingpin.Application) *Flags {
 		BoolVar(&f.DryRun)
 
 	f.ElasticsearchFlags = cmd.NewElasticsearchFlags(app, _defaultElasticsearchRetryInit, _defaultElasticsearchRetryMax)
-	f.MonitoringFlags = cmd.NewMonitoringFlags(app, _defaultPort, _defaultLogLevel)
+	f.LoggingFlags = cmd.NewLoggingFlags(app, _defaultLogLevel)
+	f.ServerFlags = cmd.NewServerFlags(app, _defaultPort)
 
 	return &f
 }

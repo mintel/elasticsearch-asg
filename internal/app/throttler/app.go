@@ -96,14 +96,14 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 // Main is the main method of App and should be called
 // in main.main() after flag parsing.
 func (app *App) Main(g prometheus.Gatherer) {
-	logger := app.flags.Logger()
+	logger := app.flags.NewLogger()
 	defer func() { _ = logger.Sync() }()
 	defer cmd.SetGlobalLogger(logger)()
 
 	// Serve the healthchecks, Prometheus metrics, and pprof traces.
 	go func() {
 		mux := app.flags.ConfigureMux(http.DefaultServeMux, app.health.Handler, g)
-		srv := app.flags.Server(mux)
+		srv := app.flags.NewServer(mux)
 		if err := srv.ListenAndServe(); err != nil {
 			logger.Fatal("error serving healthchecks/metrics", zap.Error(err))
 		}
