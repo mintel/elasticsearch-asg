@@ -22,30 +22,30 @@ and monthly snapshots that are kept for 3 years. Delete old snapshots.
 
 ## Usage
 
-```bash
-usage: snapshooter [<flags>] [<url>]
+```sh
+usage: snapshooter --repo.name=REPO.NAME [<flags>]
 
-Create and clean up Elasticsearch snapshots on a schedule.
+Create period Elasticsearch snapshots, and delete old ones with downsampling.
 
 Flags:
-      --help                    Show context-sensitive help (also try
-                                --help-long and --help-man).
-  -v, --verbose                 Show debug logging.
-      --window=P1M=PT1H ...     Snapshot frequency + TTL. May be set
-                                multiple times. ISO 8601 Duration string
-                                format. Example: `--window P1M=PT1H` ==
-                                keep hourly snapshots for 1 month.
-  -d, --delete                  If set, clean up old snapshots. This is
-                                false by default for safety's sake.
-      --repo="backups"          Name of the snapshot repository.
-      --type=TYPE               If set, create a repository of this type
-                                before creating snapshots. See also:
-                                '--settings'
-      --settings=SETTINGS ...   Use these settings creating the snapshot
-                                repository. May be set multiple times.
-                                Example: `--type=s3 --settings
-                                bucket=my_bucket`
-
-Args:
-  [<url>]  Elasticsearch URL. Default: http://localhost:9200
+      --help                   Show context-sensitive help (also try --help-long and --help-man).
+      --hourly=HOURLY          Number of hourly snapshots to keep.
+      --daily=DAILY            Number of daily snapshots to keep.
+      --weekly=WEEKLY          Number of weekly snapshots to keep.
+      --monthly=MONTHLY        Number of monthly snapshots to keep.
+      --yearly=YEARLY          Number of yearly snapshots to keep.
+  -r, --repo.name=REPO.NAME    The name of the snapshot repository to use.
+      --repo.type=REPO.TYPE    Ensure a snapshot repository with this type and --repo.name exists.
+      --repo.settings=REPO.SETTINGS ...
+                               Settings to create snapshot repository with. See also: --repo.name and --repo.type.
+  -d, --delete                 Delete old snapshots. Not enabled by default for safety.
+      --dry-run                If set, print actions without taking them.
+  -e, --elasticsearch.url=http://127.0.0.1:9200 ...
+                               URL(s) of Elasticsearch.
+      --log.level=INFO         Set logging level.
+      --serve.port=8080        Port on which to expose healthchecks and Prometheus metrics.
+      --serve.metrics="/metrics"
+                               Path at which to serve Prometheus metrics.
+      --serve.live="/livez"    Path at which to serve liveness healthcheck.
+      --serve.ready="/readyz"  Path at which to serve readiness healthcheck.
 ```

@@ -1,39 +1,21 @@
 sudo: required
 language: go
 go:
-  - "1.11.x"
-  - "1.12.x"
-services:
-  - docker
+  - "1.13.x"
 
 matrix:
   allow_failures:
   - go: tip
-
-env:
-  - GO111MODULE=on
-  - GO111MODULE=off
 
 cache:
   directories:
     - $HOME/.cache/go-build
     - $HOME/gopath/pkg/mod
 
-addons:
-  apt:
-    update: true
-    packages:
-    - docker-ce
-
-before_install:
-  - sudo sysctl -w vm.max_map_count=262144
-
 install:
-  - GOPROXY=https://proxy.golang.org go get -t -v ./...
+  - go get -t -v ./...
 
 before_script:
-  # Generate mocks of latest AWS SDK APIs.
-  - GOPROXY=https://proxy.golang.org go get -u github.com/vektra/mockery/cmd/mockery
   - go generate ./...
 
 script:
