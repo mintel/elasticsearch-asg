@@ -2,14 +2,12 @@
 
 [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-asg-throttler.svg)](https://hub.docker.com/r/mintel/elasticsearch-asg-throttler)
 
-Enable/disable scaling of an AWS AutoScaling Group based on Elasticsearch cluster status.
-
 ## Usage
 
 ```sh
 usage: throttler --group=AUTOSCALING_GROUP_NAME [<flags>]
 
-Enable or disable AWS AutoScaling Group scaling based on Elasticsearch cluster status.
+Regulate an AWS AutoScaling Group running Elasticsearch by preventing new autoscaling actions until the cluster is stable (not red, no relocating shards, etc).
 
 Flags:
       --help                    Show context-sensitive help (also try --help-long and --help-man).

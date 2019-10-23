@@ -19,7 +19,7 @@ import (
 
 const (
 	Name  = "snapshooter"
-	Usage = "Create period Elasticsearch snapshots, and delete old ones with downsampling."
+	Usage = "Take snapshots of Elasticsearch cluster on a schedule, and clean up old ones with downsampling."
 )
 
 // App holds application state.

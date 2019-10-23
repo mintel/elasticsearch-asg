@@ -27,7 +27,15 @@ import (
 
 const (
 	Name  = "cloudwatcher"
-	Usage = "Push Elasticsearch metrics to AWS CloudWatch, specifically to run AWS Autoscaling Groups for Elasticsearch."
+	Usage = `Cloudwatcher pushes metrics about an Elasticsearch cluster to AWS CloudWatch, mainly to inform AWS Target Tracing Scaling Policies.
+
+The metrics include:
+
+  - File system utilization (data nodes only)
+  - JVM heap utilization (both in total, and per-memory pool)
+  - JVM garbage collection stats
+
+The metrics are both in total, and broken out by node role (master, data, etc...).`
 
 	// Batch size when pushing metrics to CloudWatch.
 	// This is the max allowed by the AWS API.

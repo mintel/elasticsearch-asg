@@ -19,7 +19,7 @@ import (
 
 const (
 	Name  = "throttler"
-	Usage = "Enable or disable AWS AutoScaling Group scaling based on Elasticsearch cluster status."
+	Usage = "Regulate an AWS AutoScaling Group running Elasticsearch by preventing new autoscaling actions until the cluster is stable (not red, no relocating shards, etc)."
 )
 
 // App holds application state.

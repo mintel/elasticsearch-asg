@@ -29,7 +29,9 @@ import (
 
 const (
 	Name  = "drainer"
-	Usage = "Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated."
+	Usage = `Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated,
+either by an AWS AutoScaling Group downscaling or by Spot Instance interruption,
+by consuming CloudWatch Events from an SQS Queue. It assumes that Elasticsearch node names == EC2 instance ID.`
 
 	_nodeAdded   = "node-added"
 	_nodeEmpty   = "node-empty"

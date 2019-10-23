@@ -2,14 +2,12 @@
 
 [![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-drainer.svg)](https://hub.docker.com/r/mintel/elasticsearch-drainer)
 
-Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated.
-
 ## Usage
 
 ```sh
 usage: drainer --queue=SQS_QUEUE_URL [<flags>]
 
-Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated.
+Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated, either by an AWS AutoScaling Group downscaling or by Spot Instance interruption, by consuming CloudWatch Events from an SQS Queue. It assumes that Elasticsearch node names == EC2 instance ID.
 
 Flags:
       --help                    Show context-sensitive help (also try --help-long and --help-man).
@@ -27,3 +25,13 @@ Flags:
       --serve.live="/livez"     Path at which to serve liveness healthcheck.
       --serve.ready="/readyz"   Path at which to serve readiness healthcheck.
 ```
+
+## CloudWatch Events
+
+Drainer can receive two kinds of events from CloudWatch Events:
+
+- [EC2 Instance-terminate Lifecycle Action](https://docs.aws.amazon.com/autoscaling/ec2/userguide/cloud-watch-events.html#terminate-lifecycle-action).
+- [Spot Instance interruption notices](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-interruptions.html#spot-instance-termination-notices).
+
+Both event types should be sent into an SQS queue that drainer consumes from.
+See also: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/resource-based-policies-cwe.html#sqs-permissions
