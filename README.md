@@ -75,6 +75,17 @@ dlv test
 
 See the [Delve Getting Started] guide for more details.
 
+### Make a new release
+
+If you tag a commit with a semantic version, Docker Hub will build it as a separate tag. For example:
+
+```sh
+git tag -a v1.2.3 -m "Release v1.2.3"
+git push --follow-tags
+```
+
+Will build Docker images like `mintel/elasticsearch-cloudwatcher:1.2.3`.
+
 <!-- Links -->
 [AWS Target Tracing Scaling Policies]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scaling-target-tracking.html
 [cloudwatcher]: cmd/cloudwatcher
