@@ -1,0 +1,22 @@
+[
+    {
+        "docs": "49",
+        "index": ".monitoring-es-7-2019.07.18",
+        "ip": "10.2.4.243",
+        "node": "i-0adf68017a253c05d",
+        "prirep": "r",
+        "shard": "0",
+        "state": "STARTED",
+        "store": "340.7kb"
+    },
+    {
+        "docs": "43",
+        "index": ".monitoring-es-7-2019.07.18",
+        "ip": "10.2.3.29",
+        "node": "i-0f5c6d4d61d41b9fc",
+        "prirep": "p",
+        "shard": "0",
+        "state": "STARTED",
+        "store": "275.2kb"
+    }
+]

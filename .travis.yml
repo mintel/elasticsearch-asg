@@ -14,12 +14,16 @@ cache:
 
 install:
   - go get -t -v ./...
+  - cd ./v2 && go get -t -v ./... && cd ..
+  - go install github.com/vektra/mockery/cmd/mockery
 
 before_script:
   - go generate ./...
+  - cd ./v2 && go generate ./... && cd ..
 
 script:
   - go test -race -timeout 5m -coverprofile=coverage.txt -covermode=atomic ./...
+  - cd ./v2 && go test -race -timeout 5m -coverprofile=profile.out -covermode=atomic ./... && cat profile.out >> ../coverage.txt && cd ..
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)

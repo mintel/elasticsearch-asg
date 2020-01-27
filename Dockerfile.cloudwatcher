@@ -31,7 +31,7 @@ RUN apt-get update -y \
     && update-ca-certificates
 
 # Build the binary
-RUN CGO_ENABLED=0 go build -ldflags='-w -s' -trimpath -o /go/bin/cloudwatcher ./cmd/cloudwatcher
+RUN cd v2 && CGO_ENABLED=0 go build -ldflags='-w -s' -trimpath -o /go/bin/cloudwatcher ./cmd/cloudwatcher
 
 ##########################
 # STAGE 2 deployment image

@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
-	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	elastic "github.com/olivere/elastic/v7"
 	"github.com/olivere/elastic/v7/uritemplates"
 )
 
@@ -168,71 +167,71 @@ type CatShardsResponse []CatShardsResponseRow
 // be filled; that depends on the number of columns chose in the
 // request (see CatShardsService.Columns).
 type CatShardsResponseRow struct {
-	CompletionSize                 *string    `json:"completion.size"`                // size of completion
-	Docs                           *int       `json:"docs,string"`                    // number of docs in shard
-	FieldDataEvictions             *int       `json:"fielddata.evictions,string"`     // fielddata evictions
-	FieldDataMemorySize            *string    `json:"fielddata.memory_size"`          // used fielddata cache
-	FlushTotal                     *int       `json:"flush.total,string"`             // number of flushes
-	FlushTotalTime                 *string    `json:"flush.total_time"`               // time spent in flush
-	GetCurrent                     *int       `json:"get.current,string"`             // number of current get ops
-	GetExistsTime                  *string    `json:"get.exists_time"`                // time spent in successful gets
-	GetExistsTotal                 *int       `json:"get.exists_total,string"`        // number of successful gets
-	GetMissingTime                 *string    `json:"get.missing_time"`               // time spent in failed gets
-	GetMissingTotal                *int       `json:"get.missing_total,string"`       // number of failed gets
-	GetTime                        *string    `json:"get.time"`                       // time spent in get
-	GetTotal                       *int       `json:"get.total,string"`               // number of get ops
-	ID                             *string    `json:"id"`                             // unique id of node where it lives
-	Index                          string     `json:"index"`                          // index name
-	IndexingDeleteCurrent          *int       `json:"indexing.delete_current,string"` // number of current deletions
-	IndexingDeleteTotal            *int       `json:"indexing.delete_total,string"`   // number of delete ops
-	IndexingDeleteTime             *string    `json:"indexing.delete_time"`           // time spent in deletions
-	IndexingIndexCurrent           *int       `json:"indexing.index_current,string"`  // number of current indexing ops
-	IndexingIndexFailed            *int       `json:"indexing.index_failed,string"`   // number of failed indexing ops
-	IndexingIndexTime              *string    `json:"indexing.index_time"`            // time spent in indexing
-	IndexingIndexTotal             *int       `json:"indexing.index_total,string"`    // number of indexing ops
-	IP                             *string    `json:"ip"`                             // ip of node where it lives
-	MergesCurrent                  *int       `json:"merges.current,string"`          // number of current merges
-	MergesCurrentDocs              *int       `json:"merges.current_docs,string"`     // number of current merging docs
-	MergesCurrentSize              *string    `json:"merges.current_size"`            // size of current merges
-	MergesTotal                    *int       `json:"merges.total,string"`            // number of completed merge ops
-	MergesTotalDocs                *int       `json:"merges.total_docs,string"`       // docs merged
-	MergesTotalSize                *string    `json:"merges.total_size"`              // size merged
-	MergesTotalTime                *string    `json:"merges.total_time"`              // time spent in merges
-	Node                           *string    `json:"node"`                           // name of node where it lives
-	PrimaryOrReplica               string     `json:"prirep"`                         // primary ("p") or replica ("r")
-	QueryCacheEvictions            *int       `json:"query_cache.evictions,string"`   // query cache evictions
-	QueryCacheMemorySize           *string    `json:"query_cache.memory_size"`        // used query cache
-	RecoverySourceType             *string    `json:"recoverysource.type"`            // recovery source type
-	RefreshListeners               *int       `json:"refresh.listeners,string"`       // number of pending refresh listeners
-	RefreshTime                    *string    `json:"refresh.time"`                   // time spent in refreshes
-	RefreshTotal                   *int       `json:"refresh.total,string"`           // total refreshes
-	SearchFetchCurrent             *int       `json:"search.fetch_current,string"`    // current fetch phase ops
-	SearchFetchTime                *string    `json:"search.fetch_time"`              // time spent in fetch phase
-	SearchFetchTotal               *int       `json:"search.fetch_total,string"`      // total fetch ops
-	SearchOpenContexts             *int       `json:"search.open_contexts,string"`    // open search contexts
-	SearchQueryCurrent             *int       `json:"search.query_current,string"`    // current query phase ops
-	SearchQueryTime                *string    `json:"search.query_time"`              // time spent in query phase
-	SearchQueryTotal               *int       `json:"search.query_total,string"`      // total query phase ops
-	SearchScrollCurrent            *int       `json:"search.scroll_current,string"`   // open scroll contexts
-	SearchScrollTime               *string    `json:"search.scroll_time"`             // time scroll contexts held open
-	SearchScrollTotal              *int       `json:"search.scroll_total,string"`     // completed scroll contexts
-	SegmentsCount                  *int       `json:"segments.count,string"`          // number of segments
-	SegmentsFixedBitsetMemory      *string    `json:"segments.fixed_bitset_memory"`   // memory used by fixed bit sets for nested object field types and type filters for types referred in _parent fields
-	SegmentsIndexWriterMemory      *string    `json:"segments.index_writer_memory"`   // memory used by index writer
-	SegmentsMemory                 *string    `json:"segments.memory"`                // memory used by segments
-	SegmentsVersionMapMemory       *string    `json:"segments.version_map_memory"`    // memory used by version map
-	SequenceNumberGlobalCheckpoint *string    `json:"seq_no.global_checkpoint"`       // global checkpoint
-	SequenceNumberLocalCheckpoint  *string    `json:"seq_no.local_checkpoint"`        // local checkpoint
-	SequenceNumberMax              *string    `json:"seq_no.max"`                     // max sequence number
-	Shard                          string     `json:"shard"`                          // shard name
-	State                          string     `json:"state"`                          // shard state
-	Store                          *string    `json:"store"`                          // store size of shard (how much disk it uses)
-	SyncID                         *string    `json:"sync_id"`                        // sync id
-	UnassignedAt                   *time.Time `json:"unassigned.at"`                  // time shard became unassigned (UTC)
-	UnassignedDeatils              *string    `json:"unassigned.details"`             // additional details as to why the shard became unassigned
-	UnassignedFor                  *string    `json:"unassigned.for"`                 // time has been unassigned
-	UnassignedReason               *string    `json:"unassigned.reason"`              // reason shard is unassigned (https://www.elastic.co/guide/en/elasticsearch/reference/7.0/cat-shards.html#reason-unassigned)
-	WarmerCurrent                  *int       `json:"warmer.current,string"`          // current warmer ops
-	WarmerTotal                    *int       `json:"warmer.total,string"`            // total warmer ops
-	WarmerTotalTime                *string    `json:"warmer.total_time"`              // time spent in warmers
+	CompletionSize                 string `json:"completion.size"`                // size of completion
+	Docs                           int    `json:"docs,string"`                    // number of docs in shard
+	FieldDataEvictions             string `json:"fielddata.evictions"`            // fielddata evictions
+	FieldDataMemorySize            string `json:"fielddata.memory_size"`          // used fielddata cache
+	FlushTotal                     int    `json:"flush.total,string"`             // number of flushes
+	FlushTotalTime                 string `json:"flush.total_time"`               // time spent in flush
+	GetCurrent                     int    `json:"get.current,string"`             // number of current get ops
+	GetExistsTime                  string `json:"get.exists_time"`                // time spent in successful gets
+	GetExistsTotal                 int    `json:"get.exists_total,string"`        // number of successful gets
+	GetMissingTime                 string `json:"get.missing_time"`               // time spent in failed gets
+	GetMissingTotal                int    `json:"get.missing_total,string"`       // number of failed gets
+	GetTime                        string `json:"get.time"`                       // time spent in get
+	GetTotal                       int    `json:"get.total,string"`               // number of get ops
+	ID                             string `json:"id"`                             // unique id of node where it lives
+	Index                          string `json:"index"`                          // index name
+	IndexingDeleteCurrent          int    `json:"indexing.delete_current,string"` // number of current deletions
+	IndexingDeleteTotal            int    `json:"indexing.delete_total,string"`   // number of delete ops
+	IndexingDeleteTime             string `json:"indexing.delete_time"`           // time spent in deletions
+	IndexingIndexCurrent           int    `json:"indexing.index_current,string"`  // number of current indexing ops
+	IndexingIndexFailed            int    `json:"indexing.index_failed,string"`   // number of failed indexing ops
+	IndexingIndexTime              string `json:"indexing.index_time"`            // time spent in indexing
+	IndexingIndexTotal             int    `json:"indexing.index_total,string"`    // number of indexing ops
+	IP                             string `json:"ip"`                             // ip of node where it lives
+	MergesCurrent                  int    `json:"merges.current,string"`          // number of current merges
+	MergesCurrentDocs              int    `json:"merges.current_docs,string"`     // number of current merging docs
+	MergesCurrentSize              string `json:"merges.current_size"`            // size of current merges
+	MergesTotal                    int    `json:"merges.total,string"`            // number of completed merge ops
+	MergesTotalDocs                int    `json:"merges.total_docs,string"`       // docs merged
+	MergesTotalSize                string `json:"merges.total_size"`              // size merged
+	MergesTotalTime                string `json:"merges.total_time"`              // time spent in merges
+	Node                           string `json:"node"`                           // name of node where it lives
+	PrimaryOrReplica               string `json:"prirep"`                         // primary ("p") or replica ("r")
+	QueryCacheEvictions            int    `json:"query_cache.evictions,string"`   // query cache evictions
+	QueryCacheMemorySize           string `json:"query_cache.memory_size"`        // used query cache
+	RecoverySourceType             string `json:"recoverysource.type"`            // recovery source type
+	RefreshListeners               int    `json:"refresh.listeners,string"`       // number of pending refresh listeners
+	RefreshTime                    string `json:"refresh.time"`                   // time spent in refreshes
+	RefreshTotal                   int    `json:"refresh.total,string"`           // total refreshes
+	SearchFetchCurrent             int    `json:"search.fetch_current,string"`    // current fetch phase ops
+	SearchFetchTime                string `json:"search.fetch_time"`              // time spent in fetch phase
+	SearchFetchTotal               int    `json:"search.fetch_total,string"`      // total fetch ops
+	SearchOpenContexts             int    `json:"search.open_contexts,string"`    // open search contexts
+	SearchQueryCurrent             int    `json:"search.query_current,string"`    // current query phase ops
+	SearchQueryTime                string `json:"search.query_time"`              // time spent in query phase
+	SearchQueryTotal               int    `json:"search.query_total,string"`      // total query phase ops
+	SearchScrollCurrent            int    `json:"search.scroll_current,string"`   // open scroll contexts
+	SearchScrollTime               string `json:"search.scroll_time"`             // time scroll contexts held open
+	SearchScrollTotal              int    `json:"search.scroll_total,string"`     // completed scroll contexts
+	SegmentsCount                  int    `json:"segments.count,string"`          // number of segments
+	SegmentsFixedBitsetMemory      string `json:"segments.fixed_bitset_memory"`   // memory used by fixed bit sets for nested object field types and type filters for types referred in _parent fields
+	SegmentsIndexWriterMemory      string `json:"segments.index_writer_memory"`   // memory used by index writer
+	SegmentsMemory                 string `json:"segments.memory"`                // memory used by segments
+	SegmentsVersionMapMemory       string `json:"segments.version_map_memory"`    // memory used by version map
+	SequenceNumberGlobalCheckpoint string `json:"seq_no.global_checkpoint"`       // global checkpoint
+	SequenceNumberLocalCheckpoint  string `json:"seq_no.local_checkpoint"`        // local checkpoint
+	SequenceNumberMax              string `json:"seq_no.max"`                     // max sequence number
+	Shard                          string `json:"shard"`                          // shard name
+	State                          string `json:"state"`                          // shard state
+	Store                          string `json:"store"`                          // store size of shard (how much disk it uses)
+	SyncID                         string `json:"sync_id"`                        // sync id
+	UnassignedAt                   string `json:"unassigned.at"`                  // time shard became unassigned (UTC)
+	UnassignedDeatils              string `json:"unassigned.details"`             // additional details as to why the shard became unassigned
+	UnassignedFor                  string `json:"unassigned.for"`                 // time has been unassigned
+	UnassignedReason               string `json:"unassigned.reason"`              // reason shard is unassigned (https://www.elastic.co/guide/en/elasticsearch/reference/7.0/cat-shards.html#reason-unassigned)
+	WarmerCurrent                  int    `json:"warmer.current,string"`          // current warmer ops
+	WarmerTotal                    int    `json:"warmer.total,string"`            // total warmer ops
+	WarmerTotalTime                string `json:"warmer.total_time"`              // time spent in warmers
 }

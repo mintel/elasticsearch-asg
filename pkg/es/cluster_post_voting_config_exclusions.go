@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/url"
 
-	elastic "github.com/olivere/elastic/v7" // Elasticsearch client.
+	elastic "github.com/olivere/elastic/v7"
 )
 
 // ClusterPostVotingConfigExclusion removes all voting configuration exclusions,
@@ -83,7 +83,7 @@ func (s *ClusterPostVotingConfigExclusion) Do(ctx context.Context) (*ClusterPost
 	}
 
 	// Return operation response
-	ret := &ClusterPostVotingConfigExclusionResponse{}
+	ret := new(ClusterPostVotingConfigExclusionResponse)
 	return ret, nil
 }
 
