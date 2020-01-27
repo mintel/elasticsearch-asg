@@ -4,12 +4,12 @@
 [![GoDoc](https://godoc.org/github.com/mintel/elasticsearch-asg?status.svg)](https://godoc.org/github.com/mintel/elasticsearch-asg)
 [![GitHub](https://img.shields.io/github/license/mintel/elasticsearch-asg.svg)](https://raw.githubusercontent.com/mintel/elasticsearch-asg/master/LICENSE)
 
-A number of little applications I needed setting up Elasticsearch as AWS Autoscaling Groups.
+A number of little applications I needed setting up Elasticsearch on AWS Autoscaling Groups.
 These target Elasticsearch >= 7.0.
 
 - [cloudwatcher] ([![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-cloudwatcher.svg)](https://hub.docker.com/r/mintel/elasticsearch-cloudwatcher)) - Push metrics about an Elasticsearch cluster to AWS CloudWatch, mainly to inform [AWS Target Tracing Scaling Policies].
 
-- [drainer] ([![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-drainer.svg)](https://hub.docker.com/r/mintel/elasticsearch-drainer)) - Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated, either by an AWS AutoScaling Group downscaling or by Spot Instance interruption, by consuming [CloudWatch Events] from an [SQS Queue].
+- [drainer] ([![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-drainer.svg)](https://hub.docker.com/r/mintel/elasticsearch-drainer)) - Remove shards from Elasticsearch nodes on EC2 instances that are about to be terminated - either by an AWS AutoScaling Group downscaling or by Spot Instance interruption - by consuming [CloudWatch Events] from an [SQS Queue].
 
 - [throttler] ([![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/mintel/elasticsearch-throttler.svg)](https://hub.docker.com/r/mintel/elasticsearch-throttler)) - Regulate an AWS AutoScaling Group running Elasticsearch by preventing new autoscaling actions until the cluster is stable (not red, no relocating shards, etc).
 
