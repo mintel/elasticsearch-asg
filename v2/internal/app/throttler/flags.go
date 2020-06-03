@@ -59,7 +59,7 @@ func NewFlags(app *kingpin.Application) *Flags {
 	app.Flag("service", "Name of an AWS ECS service in --cluster running Elasticsearch.").
 		Short('s').
 		Required().
-		PlaceHolder("ECS_CLUSTER_NAME").
+		PlaceHolder("ECS_SERVICE_NAME").
 		StringsVar(&f.ECSServices)
 
 	app.Flag("interval", "The interval at which Elasticsearch should be polled for status information.").
