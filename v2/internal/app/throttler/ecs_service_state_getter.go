@@ -34,6 +34,13 @@ func NewECSServiceStateGetter(cfg aws.Config) *ECSServiceStateGetter {
 	}
 }
 
+// MockECSServiceStateGetter takes an ECSClient arg and returns a new ECSServiceStateGetter.
+func MockECSServiceStateGetter(mockClient ecsiface.ClientAPI) *ECSServiceStateGetter {
+	return &ECSServiceStateGetter{
+		client: mockClient,
+	}
+}
+
 // Get returns the state of an ECS service.
 func (g *ECSServiceStateGetter) Get(cluster, service string) (*ECSServiceState, error) {
 	req := g.client.DescribeServicesRequest(&ecs.DescribeServicesInput{
