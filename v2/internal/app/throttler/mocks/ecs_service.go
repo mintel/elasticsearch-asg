@@ -40,22 +40,14 @@ func (m *ECS) DescribeServicesRequest(i *ecs.DescribeServicesInput) ecs.Describe
 	cfg.Handlers.Retry.Clear()
 	cfg.Handlers.ValidateResponse.Clear()
 
-	metadata := aws.Metadata{
-		ServiceName:   ecs.ServiceName,
-		ServiceID:     ecs.ServiceID,
-		EndpointsID:   ecs.EndpointsID,
-		SigningName:   "ecsService",
-		SigningRegion: cfg.Region,
-		APIVersion:    "2011-01-01",
-	}
-
 	op := &aws.Operation{
 		Name:       "DescribeServices",
 		HTTPMethod: "POST",
 		HTTPPath:   "/",
 	}
 
-	req := aws.New(cfg, metadata, cfg.Handlers, nil, op, i, data)
+	req := aws.New(cfg, aws.Metadata{}, cfg.Handlers, nil, op, i, data)
+
 	req.Error = err
 	return ecs.DescribeServicesRequest{
 		Input:   i,

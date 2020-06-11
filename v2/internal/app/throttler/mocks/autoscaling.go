@@ -40,15 +40,6 @@ func (m *AutoScaling) DescribeAutoScalingGroupsRequest(i *autoscaling.DescribeAu
 	cfg.Handlers.Retry.Clear()
 	cfg.Handlers.ValidateResponse.Clear()
 
-	metadata := aws.Metadata{
-		ServiceName:   autoscaling.ServiceName,
-		ServiceID:     autoscaling.ServiceID,
-		EndpointsID:   autoscaling.EndpointsID,
-		SigningName:   "autoscaling",
-		SigningRegion: cfg.Region,
-		APIVersion:    "2011-01-01",
-	}
-
 	op := &aws.Operation{
 		Name:       "DescribeAutoScalingGroups",
 		HTTPMethod: "POST",
@@ -61,7 +52,7 @@ func (m *AutoScaling) DescribeAutoScalingGroupsRequest(i *autoscaling.DescribeAu
 		},
 	}
 
-	req := aws.New(cfg, metadata, cfg.Handlers, nil, op, i, data)
+	req := aws.New(cfg, aws.Metadata{}, cfg.Handlers, nil, op, i, data)
 	req.Error = err
 	return autoscaling.DescribeAutoScalingGroupsRequest{
 		Input:   i,
