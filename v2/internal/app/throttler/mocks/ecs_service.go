@@ -40,7 +40,6 @@ func (m *ECS) DescribeServicesRequest(i *ecs.DescribeServicesInput) ecs.Describe
 	cfg.Handlers.Retry.Clear()
 	cfg.Handlers.ValidateResponse.Clear()
 
-	// TODO: Kind of confused about this ... is this required?
 	metadata := aws.Metadata{
 		ServiceName:   ecs.ServiceName,
 		ServiceID:     ecs.ServiceID,

@@ -80,7 +80,6 @@ func NewApp(r prometheus.Registerer) (*App, error) {
 	// Add action to set up AWS client(s) after
 	// flags are parsed.
 	app.Action(func(*kingpin.ParseContext) error {
-		// TODO how the heck is this set??
 		cfg := app.flags.AWSConfig()
 		err := metrics.InstrumentAWS(&cfg.Handlers, r, namespace, nil)
 		if err != nil {

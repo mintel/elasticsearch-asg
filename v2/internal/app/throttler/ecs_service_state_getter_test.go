@@ -13,9 +13,6 @@ func TestECSStateGetter(t *testing.T) {
 		clusterName := "MyECSCluser"
 		serviceName := "MyECSService"
 
-		// So, the client.On lets us mock response behavior
-		// But what does the client setup actually achieve on its own?
-		// It returns the Request ...
 		client := &mocks.ECS{}
 		client.Test(t)
 		client.On("DescribeServicesRequest", &ecs.DescribeServicesInput{
@@ -46,9 +43,6 @@ func TestECSStateGetter(t *testing.T) {
 		clusterName := "MyECSCluser"
 		serviceName := "MyECSService"
 
-		// So, the client.On lets us mock response behavior
-		// But what does the client setup actually achieve on its own?
-		// It returns the Request ...
 		client := &mocks.ECS{}
 		client.Test(t)
 		client.On("DescribeServicesRequest", &ecs.DescribeServicesInput{
