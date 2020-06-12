@@ -12,7 +12,7 @@ import (
 	"github.com/mintel/elasticsearch-asg/v2/pkg/es"                // Extensions to the Elasticsearch client.
 )
 
-func TestClusterStateGetter(t *testing.T) {
+func TestElasticsearchStateGetter(t *testing.T) {
 	t.Run("bad", func(t *testing.T) {
 		_, _, teardown := testutil.ClientTestSetup(t)
 		defer teardown()
@@ -20,7 +20,7 @@ func TestClusterStateGetter(t *testing.T) {
 		if !assert.NoError(t, err) {
 			return
 		}
-		csg := NewClusterStateGetter(client)
+		csg := NewElasticsearchStateGetter(client)
 
 		gock.New(elastic.DefaultURL).
 			Get("/_cluster/health").
@@ -59,7 +59,7 @@ func TestClusterStateGetter(t *testing.T) {
 		if !assert.NoError(t, err) {
 			return
 		}
-		csg := NewClusterStateGetter(client)
+		csg := NewElasticsearchStateGetter(client)
 
 		gock.New(elastic.DefaultURL).
 			Get("/_cluster/health").

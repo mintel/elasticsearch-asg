@@ -10,28 +10,37 @@ import (
 	"github.com/mintel/elasticsearch-asg/v2/pkg/es" // Extensions to the Elasticsearch client.
 )
 
-// ClusterStateGetter queries an Elasticsearch cluster to return
+// ElasticsearchState represents the state of an Elasticsearch
+// cluster in the context of the throttler app.
+type ElasticsearchState struct {
+	// One of: "red", "yellow", "green".
+	Status string
+
+	// True if shards are being moved from one node to another.
+	RelocatingShards bool
+
+	// True if indices are recovering from data
+	// stored on disk, such as during a node reboot.
+	RecoveringFromStore bool
+}
+
+// ElasticsearchStateGetter queries an Elasticsearch cluster to return
 // status information about the cluster that is useful when deciding
 // whether to allow scaling up or down of the Elasticsearch cluster.
-type ClusterStateGetter struct {
+type ElasticsearchStateGetter struct {
 	client *elastic.Client
 }
 
-// NewClusterStateGetter returns a new ClusterStateGetter.
-func NewClusterStateGetter(client *elastic.Client) *ClusterStateGetter {
-	return &ClusterStateGetter{
+// NewElasticsearchStateGetter returns a new ElasticsearchStateGetter.
+func NewElasticsearchStateGetter(client *elastic.Client) *ElasticsearchStateGetter {
+	return &ElasticsearchStateGetter{
 		client: client,
 	}
 }
 
-// Get returns a ClusterState. If the previous call to Get returned
-// a ClusterState whose Status was "red" or had relocating shards, this
-// call will block until the cluster status is "yellow" or "green" and
-// there are no relocating shards.
-//
-// Only one call to Get can proceed at a time. Concurrent calls will block.
-func (sg *ClusterStateGetter) Get() (*ClusterState, error) {
-	cs := &ClusterState{}
+// Get returns an ElasticsearchState.
+func (sg *ElasticsearchStateGetter) Get() (*ElasticsearchState, error) {
+	cs := &ElasticsearchState{}
 	g, ctx := errgroup.WithContext(context.Background())
 
 	g.Go(func() error {

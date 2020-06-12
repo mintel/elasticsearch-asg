@@ -120,7 +120,9 @@ func (app *App) Main(g prometheus.Gatherer) {
 	app.clients.Elasticsearch = c
 	app.health.ElasticSessionCreated = true
 
-	clusterState := NewClusterStateGetter(app.clients.Elasticsearch)
+	clusterState := NewElasticsearchStateGetter(app.clients.Elasticsearch)
+	ecsServiceState := NewECSServiceStateGetter(app.flags.AWSConfig())
+
 	scaling := make(map[string]*AutoScalingGroupEnabler, len(app.flags.AutoScalingGroupNames))
 	for _, group := range app.flags.AutoScalingGroupNames {
 		enabler, err := NewAutoScalingGroupEnabler(
@@ -140,13 +142,16 @@ func (app *App) Main(g prometheus.Gatherer) {
 	}
 
 	ticks := app.flags.Tick()
+
 	for range ticks {
+		var good bool
+
+		// Detect state of the cluster
 		state, err := clusterState.Get()
 		if err != nil {
 			logger.Fatal("error getting Elasticsearch cluster state", zap.Error(err))
 		}
 
-		var good bool
 		switch {
 		case state.Status == "red":
 			// Don't scale when the cluster status is red.
@@ -171,6 +176,19 @@ func (app *App) Main(g prometheus.Gatherer) {
 		default:
 			logger.Debug("cluster state is good")
 			good = true
+		}
+
+		// Detect state of the ECS Services
+		for _, ecsService := range app.flags.ECSServices {
+			ecsState, err := ecsServiceState.Get(app.flags.ECSCluster, ecsService)
+			if err != nil {
+				logger.Fatal("error getting ECS Service state", zap.Error(err))
+			}
+			if ecsState.NumDeployments > 1 {
+				// Don't scale when deploying; risks data loss.
+				logger.Debug("multiple deployments detected")
+				good = false
+			}
 		}
 
 		if good {
