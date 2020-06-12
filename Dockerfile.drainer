@@ -18,11 +18,11 @@ WORKDIR /go/src/app
 # Fetch dependencies
 # Do this first for caching sake
 ENV GO111MODULE=on
-COPY go.mod go.sum ./
+COPY v2/go.mod v2/go.sum ./
 RUN go mod download
 
 # Copy source
-COPY . .
+COPY v2/ .
 
 # Install/Update packages (after src COPY so it always happens)
 RUN apt-get update -y \
@@ -31,7 +31,7 @@ RUN apt-get update -y \
     && update-ca-certificates
 
 # Build the binary
-RUN cd v2 && CGO_ENABLED=0 go build -ldflags='-w -s' -trimpath -o /go/bin/drainer ./cmd/drainer
+RUN CGO_ENABLED=0 go build -ldflags='-w -s' -trimpath -o /go/bin/drainer ./cmd/drainer
 
 ##########################
 # STAGE 2 deployment image
