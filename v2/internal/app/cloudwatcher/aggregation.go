@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	"go.uber.org/zap" // Logging
 )
 
 // AggregationData represents a container for some data series
@@ -113,6 +114,8 @@ func (d *UtilizationData) Datum() *cloudwatch.MetricDatum {
 	num, denom := floats.Sum(d.num), floats.Sum(d.denom)
 	if denom != 0 {
 		m.Value = aws.Float64((num / denom) * 100) // CloudWatch percents are int 0-100.
+	} else {
+		zap.L().Panic("Denominator is zero: cannot calculate UtilizationData Value")
 	}
 	return &m
 }
