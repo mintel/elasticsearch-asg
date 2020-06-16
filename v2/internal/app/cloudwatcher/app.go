@@ -336,6 +336,9 @@ func (app *App) pushCloudwatchData(data []cloudwatch.MetricDatum) error {
 		})
 		req.Handlers.Build.PushBack(compressPayload)
 		zap.L().Debug("pushing batch of metrics to CloudWatch", zap.Int("count", len(batch)))
+		for _, datum := range batch {
+			zap.L().Debug("pushing MetricDatum to Cloudwatch", zap.String("metricDatum", datum.String()))
+		}
 		if _, err := req.Send(context.Background()); err != nil {
 			return err
 		}
