@@ -388,16 +388,20 @@ func (s NodeStatsSlice) Aggregate(dimensions []cloudwatch.Dimension) []cloudwatc
 		},
 	}
 
-	pools := make(map[string]struct{}, 3) // 3 because there are usually 3 memory pools: "young", "survivor", and "old".
+	pools := make(map[string]struct{}, 1) // There are usually 3 memory pools: "young", "survivor", and "old".
 	for _, ns := range s {
 		for pool := range ns.JVMHeapPools {
+			// XXX: ElasticSearch 7.7 has a bug where max bytes for Young/Survivor pools is zero.
+			// As such we will cease collecting statistics on these Pool categories until the bug is fixed.
+			if strings.Title(pool) != "Old" {
+				continue
+			}
 			if _, ok := pools[pool]; !ok {
 				// Make a copy of pool local to this
 				// if-statement because the StatsData.Selector closures
 				// defined below need references to the right value.
 				// See also: // https://github.com/golang/go/wiki/CommonMistakes#using-goroutines-on-loop-iterator-variables
 				pool := pool
-
 				name := strings.Title(pool)
 				aggs = append(aggs,
 					&StatsData{
