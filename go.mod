@@ -36,9 +36,7 @@ require (
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/multierr v1.2.0 // indirect
 	go.uber.org/zap v1.10.0
-	golang.org/x/net v0.0.0-20190930134127-c5a3c61f89f3 // indirect
-	golang.org/x/sys v0.0.0-20190927073244-c990c680b611 // indirect
-	golang.org/x/text v0.3.2 // indirect
+	golang.org/x/net v0.7.0 // indirect
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
